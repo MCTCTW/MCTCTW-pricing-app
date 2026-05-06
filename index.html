@@ -1,0 +1,2142 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>金洲工作室定價工具</title>
+<style>
+:root {
+  --primary: #7C3AED;
+  --primary-light: #EDE9FE;
+  --primary-dark: #5B21B6;
+  --accent: #EC4899;
+  --bg: #F5F3FF;
+  --card: #FFFFFF;
+  --text: #1F2937;
+  --text-muted: #6B7280;
+  --border: #E5E7EB;
+  --success: #059669;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --nav-h: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',sans-serif;
+  background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;
+}
+#app{display:flex;flex-direction:column;height:100%;max-width:680px;margin:0 auto;}
+
+/* HEADER */
+.app-header{
+  background:var(--primary);color:#fff;padding:12px 16px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;box-shadow:0 2px 8px rgba(124,58,237,.3);
+}
+.app-header h1{font-size:17px;font-weight:700;letter-spacing:.5px;}
+.app-header .subtitle{font-size:11px;opacity:.8;margin-top:1px;}
+.header-icon{font-size:22px;}
+
+/* MAIN SCROLL AREA */
+main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
+.tab-content{display:none;padding:12px 12px calc(12px + var(--nav-h) + var(--safe-bottom));min-height:100%;}
+.tab-content.active{display:block;}
+
+/* BOTTOM NAV */
+.bottom-nav{
+  display:flex;flex-shrink:0;
+  background:#fff;border-top:1px solid var(--border);
+  height:calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom:var(--safe-bottom);
+  box-shadow:0 -2px 12px rgba(0,0,0,.08);
+  position:relative;z-index:10;
+}
+.nav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:none;background:none;color:var(--text-muted);font-size:10px;
+  font-weight:500;gap:2px;cursor:pointer;padding:6px 4px;transition:color .15s;
+}
+.nav-btn .nav-icon{font-size:20px;line-height:1;}
+.nav-btn.active{color:var(--primary);}
+.nav-btn.active .nav-icon{transform:scale(1.1);}
+
+/* CARDS */
+.card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+.card-title{font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;}
+
+/* FORM */
+.form-row{margin-bottom:10px;}
+.form-label{display:block;font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:4px;}
+.form-input{
+  width:100%;border:1.5px solid var(--border);border-radius:8px;
+  padding:10px 12px;font-size:16px;color:var(--text);background:#fff;
+  transition:border-color .15s;outline:none;appearance:none;
+}
+.form-input:focus{border-color:var(--primary);}
+.form-input.readonly{background:#F9FAFB;color:var(--text-muted);}
+select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236B7280'%3E%3Cpath fill-rule='evenodd' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:18px;padding-right:36px;}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+
+/* CURRENCY PICKER */
+.currency-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px;}
+.currency-btn{
+  padding:6px 12px;border-radius:20px;border:1.5px solid var(--border);
+  background:#fff;font-size:13px;font-weight:600;cursor:pointer;
+  transition:all .15s;color:var(--text-muted);
+}
+.currency-btn.active{background:var(--primary);border-color:var(--primary);color:#fff;}
+
+/* BUTTONS */
+.btn{
+  width:100%;padding:13px;border-radius:10px;border:none;
+  font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;
+}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:active{background:var(--primary-dark);}
+.btn-outline{background:#fff;color:var(--primary);border:1.5px solid var(--primary);}
+.btn-outline:active{background:var(--primary-light);}
+.btn-sm{padding:8px 16px;width:auto;font-size:13px;border-radius:8px;}
+.btn-danger{background:var(--danger);color:#fff;}
+
+/* RESULT CARD */
+.result-card{background:linear-gradient(135deg,var(--primary),#6D28D9);border-radius:14px;padding:16px;margin-bottom:10px;color:#fff;}
+.result-price{font-size:36px;font-weight:800;letter-spacing:-1px;margin:4px 0;}
+.result-label{font-size:12px;opacity:.8;font-weight:500;}
+.result-sub{font-size:13px;opacity:.9;margin-top:4px;}
+
+.breakdown-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+.breakdown-row:last-child{border-bottom:none;}
+.breakdown-label{font-size:13px;color:var(--text-muted);}
+.breakdown-value{font-size:14px;font-weight:600;color:var(--text);}
+.breakdown-row.total .breakdown-label{font-weight:700;color:var(--text);}
+.breakdown-row.total .breakdown-value{color:var(--primary);font-size:16px;}
+.breakdown-row.profit .breakdown-value{color:var(--success);}
+.breakdown-row.cost .breakdown-value{color:var(--danger);}
+
+/* BADGE */
+.badge{
+  display:inline-block;padding:2px 8px;border-radius:20px;
+  font-size:11px;font-weight:700;letter-spacing:.3px;
+}
+.badge-ok{background:#D1FAE5;color:#065F46;}
+.badge-low{background:#FEF3C7;color:#92400E;}
+.badge-bad{background:#FEE2E2;color:#991B1B;}
+
+/* SECTION HEADER */
+.section-title{
+  font-size:12px;font-weight:700;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.8px;
+  margin:16px 0 8px;padding-left:2px;
+}
+
+/* SETTINGS */
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);}
+.setting-row:last-child{border-bottom:none;}
+.setting-label{font-size:14px;flex:1;}
+.setting-note{font-size:11px;color:var(--text-muted);margin-top:1px;}
+.setting-input{
+  border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;
+  font-size:15px;text-align:right;width:110px;outline:none;
+  transition:border-color .15s;
+}
+.setting-input:focus{border-color:var(--primary);}
+.setting-input.wide{width:100%;text-align:left;margin-top:6px;}
+
+/* RECORDS */
+.record-item{background:var(--card);border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.07);cursor:pointer;}
+.record-item:active{opacity:.8;}
+.record-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
+.record-title{font-size:14px;font-weight:600;}
+.record-price{font-size:16px;font-weight:800;color:var(--primary);}
+.record-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px;}
+.record-type-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;}
+.type-regular{background:#EDE9FE;color:#5B21B6;}
+.type-live{background:#DBEAFE;color:#1E40AF;}
+.type-partner{background:#FCE7F3;color:#9D174D;}
+.type-forward{background:#D1FAE5;color:#065F46;}
+.record-date{font-size:11px;color:var(--text-muted);}
+.record-customer{font-size:12px;color:var(--text-muted);}
+
+/* MODAL */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:100;align-items:flex-end;justify-content:center;
+}
+.modal-overlay.open{display:flex;}
+.modal{
+  background:#fff;border-radius:20px 20px 0 0;padding:20px 16px;
+  width:100%;max-width:680px;padding-bottom:calc(20px + var(--safe-bottom));
+  max-height:90vh;overflow-y:auto;
+}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:14px;}
+.modal-close{float:right;font-size:22px;cursor:pointer;color:var(--text-muted);line-height:1;}
+
+/* DETAIL MODAL */
+.detail-section{margin-bottom:14px;}
+.detail-section h4{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px;}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted);}
+.empty-state .empty-icon{font-size:48px;margin-bottom:12px;}
+.empty-state p{font-size:14px;}
+
+/* ALERT */
+.alert{padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:10px;}
+.alert-info{background:#EDE9FE;color:#5B21B6;}
+.alert-success{background:#D1FAE5;color:#065F46;}
+.alert-warning{background:#FEF3C7;color:#92400E;}
+
+/* PARTNER CARD */
+.partner-card{
+  border:2px solid var(--border);border-radius:10px;padding:12px;
+  cursor:pointer;transition:all .15s;margin-bottom:8px;
+}
+.partner-card.selected{border-color:var(--primary);background:var(--primary-light);}
+.partner-name{font-size:15px;font-weight:700;}
+.partner-mult{font-size:12px;color:var(--text-muted);margin-top:2px;}
+
+/* TABS within tab */
+.inner-tab-row{display:flex;gap:6px;margin-bottom:12px;}
+.inner-tab-btn{
+  flex:1;padding:8px;border-radius:8px;border:none;background:#E5E7EB;
+  font-size:13px;font-weight:600;cursor:pointer;color:var(--text-muted);
+}
+.inner-tab-btn.active{background:var(--primary);color:#fff;}
+
+/* RATE DISPLAY */
+.rate-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--primary-light);color:var(--primary);
+  padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;
+  margin-bottom:8px;
+}
+
+/* SYNC STATUS */
+.sync-status{font-size:11px;color:var(--text-muted);text-align:center;padding:4px;}
+.sync-ok{color:var(--success);}
+.sync-fail{color:var(--danger);}
+
+/* DIVIDER */
+.divider{height:1px;background:var(--border);margin:12px 0;}
+
+/* Accordion for settings */
+.accordion{margin-bottom:8px;}
+.accordion-header{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:12px 14px;background:var(--card);border-radius:10px;
+  cursor:pointer;font-weight:600;font-size:14px;
+  box-shadow:0 1px 3px rgba(0,0,0,.07);
+}
+.accordion-header.open{border-radius:10px 10px 0 0;}
+.accordion-arrow{transition:transform .2s;font-size:12px;color:var(--text-muted);}
+.accordion-header.open .accordion-arrow{transform:rotate(180deg);}
+.accordion-body{
+  display:none;background:var(--card);
+  border-radius:0 0 10px 10px;padding:0 14px 4px;
+  box-shadow:0 2px 4px rgba(0,0,0,.07);
+}
+.accordion-body.open{display:block;}
+
+/* Number badge for margin */
+.margin-display{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:52px;height:26px;border-radius:13px;font-size:12px;font-weight:700;
+}
+
+/* Override price section */
+.override-section{
+  display:flex;gap:8px;align-items:center;margin-top:8px;
+}
+.override-section .form-input{flex:1;}
+
+/* Toggle switch */
+.toggle-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;}
+.toggle-switch input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:#E5E7EB;border-radius:24px;transition:.2s;}
+.toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle-switch input:checked + .toggle-slider{background:var(--primary);}
+.toggle-switch input:checked + .toggle-slider:before{transform:translateX(20px);}
+
+/* Tiered margin rows */
+.tiered-row{display:flex;align-items:center;gap:6px;padding:5px 0;flex-wrap:wrap;}
+.tiered-lbl{font-size:13px;color:var(--text-muted);white-space:nowrap;}
+.tiered-input{
+  border:1.5px solid var(--border);border-radius:6px;padding:6px 8px;
+  font-size:14px;text-align:right;width:72px;outline:none;
+  transition:border-color .15s;
+}
+.tiered-input:focus{border-color:var(--primary);}
+.tiered-sub{font-size:11px;color:var(--text-muted);padding:2px 0 6px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="app-header">
+    <div>
+      <h1>金洲工作室定價工具</h1>
+      <div class="subtitle">MCTCTW</div>
+    </div>
+    <div class="header-icon">💜</div>
+  </div>
+
+  <main id="main-scroll">
+
+    <!-- ====== TAB: 一般定價 ====== -->
+    <section id="tab-regular" class="tab-content active">
+      <div class="card">
+        <div class="card-title">商品資訊</div>
+
+        <div class="form-row">
+          <label class="form-label">幣別</label>
+          <div class="currency-tabs" id="regular-currency-tabs">
+            <button class="currency-btn active" data-val="KRW">🇰🇷 韓幣</button>
+            <button class="currency-btn" data-val="JPY">🇯🇵 日幣</button>
+            <button class="currency-btn" data-val="CNY">🇨🇳 人民幣</button>
+            <button class="currency-btn" data-val="HKD">🇭🇰 港幣</button>
+            <button class="currency-btn" data-val="TWD">🇹🇼 台幣</button>
+          </div>
+          <div id="regular-rate-chip" class="rate-chip" style="margin-top:6px;">匯率 1 KRW = 0.02381 TWD</div>
+          <div id="regular-jpy-mode" style="display:none;margin-top:6px;">
+            <div class="inner-tab-row" style="margin-bottom:0;">
+              <button class="inner-tab-btn active" id="regular-jpy-online" onclick="setJPYMode('online')">🌐 線上自訂</button>
+              <button class="inner-tab-btn" id="regular-jpy-helper" onclick="setJPYMode('helper')">🤝 小幫手代訂</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">商品原價</label>
+            <input type="number" class="form-input" id="regular-price" placeholder="0" inputmode="decimal" oninput="calcRegular()">
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">當地運費</label>
+            <input type="number" class="form-input" id="regular-local-ship" placeholder="0" inputmode="decimal" oninput="calcRegular()">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">運送資訊</div>
+        <div class="form-row">
+          <label class="form-label">貨運類別</label>
+          <select class="form-input" id="regular-ship-type" onchange="calcRegular()">
+            <option value="korea">🇰🇷 韓國</option>
+            <option value="china_normal">🇨🇳 中國空運（普貨）</option>
+            <option value="china_special">🇨🇳 中國空運（特貨）</option>
+            <option value="japan">🇯🇵 日本</option>
+            <option value="hk">🇭🇰 香港</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">預估重量（KG）</label>
+          <input type="number" class="form-input" id="regular-weight" placeholder="0.0" step="0.05" inputmode="decimal" oninput="calcRegular()">
+        </div>
+      </div>
+
+      <!-- RESULT -->
+      <div id="regular-result" style="display:none;">
+        <div class="result-card">
+          <div class="result-label">建議定價</div>
+          <div class="result-price" id="regular-suggested-price">NT$ —</div>
+          <div id="regular-margin-badge"></div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);">
+            <div class="result-label">親友價（免營業稅＆金流手續費）</div>
+            <div style="font-size:26px;font-weight:800;letter-spacing:-0.5px;" id="regular-friend-price">NT$ —</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">費用明細</div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">商品原價（台幣）</span>
+            <span class="breakdown-value" id="r-product-twd">—</span>
+          </div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">當地運費（台幣）</span>
+            <span class="breakdown-value" id="r-local-twd">—</span>
+          </div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">國際運費（台幣）</span>
+            <span class="breakdown-value" id="r-intl-twd">—</span>
+          </div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">國際關稅</span>
+            <span class="breakdown-value" id="r-tariff">—</span>
+          </div>
+          <div class="breakdown-row total">
+            <span class="breakdown-label">成本合計</span>
+            <span class="breakdown-value" id="r-total-cost">—</span>
+          </div>
+          <div class="divider"></div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">營業稅（5%）</span>
+            <span class="breakdown-value" id="r-biz-tax">—</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">金流手續費（1.5%）</span>
+            <span class="breakdown-value" id="r-payment-fee">—</span>
+          </div>
+          <div class="breakdown-row profit">
+            <span class="breakdown-label">淨利</span>
+            <span class="breakdown-value" id="r-net-profit">—</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">自訂定價</div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">手動設定定價（台幣）</label>
+            <div class="override-section">
+              <input type="number" class="form-input" id="regular-override" placeholder="留空使用建議定價" inputmode="decimal" oninput="calcRegular()">
+              <button class="btn btn-outline btn-sm" onclick="clearOverride('regular-override','calcRegular')">清除</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">記錄此報價（選填）</div>
+          <div class="form-row">
+            <label class="form-label">商品名稱</label>
+            <input type="text" class="form-input" id="regular-product-name" placeholder="可留空">
+          </div>
+          <div class="form-row">
+            <label class="form-label">商品網址 <span style="font-weight:400;color:var(--text-muted);">（選填）</span></label>
+            <input type="url" class="form-input" id="regular-url" placeholder="https://..." inputmode="url">
+          </div>
+          <div class="form-row">
+            <label class="form-label">客人姓名</label>
+            <input type="text" class="form-input" id="regular-customer" placeholder="1:1 報價時填寫">
+          </div>
+          <div class="form-row">
+            <label class="form-label">備註</label>
+            <input type="text" class="form-input" id="regular-notes" placeholder="可留空">
+          </div>
+          <button class="btn btn-primary" onclick="saveRecord('regular')">💾 儲存紀錄</button>
+        </div>
+      </div>
+
+      <div id="regular-empty" class="empty-state">
+        <div class="empty-icon">🧮</div>
+        <p>輸入商品原價及重量<br>即可自動計算定價</p>
+      </div>
+    </section>
+
+    <!-- ====== TAB: 連線定價 ====== -->
+    <section id="tab-live" class="tab-content">
+      <div class="alert alert-info">📦 連線／親揹定價：不含國際運費及關稅</div>
+
+      <div class="card">
+        <div class="card-title">商品資訊</div>
+        <div class="form-row">
+          <label class="form-label">幣別</label>
+          <div class="currency-tabs" id="live-currency-tabs">
+            <button class="currency-btn active" data-val="KRW">🇰🇷 韓幣</button>
+            <button class="currency-btn" data-val="JPY">🇯🇵 日幣</button>
+            <button class="currency-btn" data-val="CNY">🇨🇳 人民幣</button>
+            <button class="currency-btn" data-val="HKD">🇭🇰 港幣</button>
+            <button class="currency-btn" data-val="TWD">🇹🇼 台幣</button>
+          </div>
+          <div id="live-rate-chip" class="rate-chip" style="margin-top:6px;">匯率 1 KRW = 0.02381 TWD</div>
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">商品原價</label>
+          <input type="number" class="form-input" id="live-price" placeholder="0" inputmode="decimal" oninput="calcLive()">
+        </div>
+      </div>
+
+      <div id="live-result" style="display:none;">
+        <div class="result-card">
+          <div class="result-label">建議定價</div>
+          <div class="result-price" id="live-suggested-price">NT$ —</div>
+          <div id="live-margin-badge"></div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);">
+            <div class="result-label">親友價（免營業稅＆金流手續費）</div>
+            <div style="font-size:26px;font-weight:800;letter-spacing:-0.5px;" id="live-friend-price">NT$ —</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">費用明細</div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">商品原價（台幣）</span>
+            <span class="breakdown-value" id="l-product-twd">—</span>
+          </div>
+          <div class="breakdown-row total">
+            <span class="breakdown-label">成本合計</span>
+            <span class="breakdown-value" id="l-total-cost">—</span>
+          </div>
+          <div class="divider"></div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">營業稅（5%）</span>
+            <span class="breakdown-value" id="l-biz-tax">—</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">金流手續費（1.5%）</span>
+            <span class="breakdown-value" id="l-payment-fee">—</span>
+          </div>
+          <div class="breakdown-row profit">
+            <span class="breakdown-label">淨利</span>
+            <span class="breakdown-value" id="l-net-profit">—</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">自訂定價</div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">手動設定定價（台幣）</label>
+            <div class="override-section">
+              <input type="number" class="form-input" id="live-override" placeholder="留空使用建議定價" inputmode="decimal" oninput="calcLive()">
+              <button class="btn btn-outline btn-sm" onclick="clearOverride('live-override','calcLive')">清除</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">記錄此報價（選填）</div>
+          <div class="form-row">
+            <label class="form-label">商品名稱</label>
+            <input type="text" class="form-input" id="live-product-name" placeholder="可留空">
+          </div>
+          <div class="form-row">
+            <label class="form-label">客人姓名</label>
+            <input type="text" class="form-input" id="live-customer" placeholder="1:1 報價時填寫">
+          </div>
+          <div class="form-row">
+            <label class="form-label">備註</label>
+            <input type="text" class="form-input" id="live-notes" placeholder="可留空">
+          </div>
+          <button class="btn btn-primary" onclick="saveRecord('live')">💾 儲存紀錄</button>
+        </div>
+      </div>
+
+      <div id="live-empty" class="empty-state">
+        <div class="empty-icon">✈️</div>
+        <p>適用親揹或連線購入<br>不含國際運費及關稅</p>
+      </div>
+    </section>
+
+    <!-- ====== TAB: 合作開團 ====== -->
+    <section id="tab-partner" class="tab-content">
+      <div class="alert alert-info">🤝 合作開團定價：選擇合作對象，輸入成本資訊</div>
+
+      <div class="card">
+        <div class="card-title">選擇合作對象</div>
+        <div id="partner-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">商品資訊</div>
+        <div class="form-row">
+          <label class="form-label">品名</label>
+          <input type="text" class="form-input" id="partner-product-name-input" placeholder="此次合作品名">
+        </div>
+        <div class="form-row">
+          <label class="form-label">對方提供的成本金額（台幣）</label>
+          <input type="number" class="form-input" id="partner-cost" placeholder="0" inputmode="decimal" oninput="calcPartner()">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">運送資訊</div>
+        <div id="partner-ship-rate-chip" class="rate-chip" style="margin-bottom:10px;">運費費率載入中…</div>
+        <div class="form-row" style="margin-bottom:0">
+          <label class="form-label">預估重量（KG）</label>
+          <input type="number" class="form-input" id="partner-weight" placeholder="0.0" step="0.05" inputmode="decimal" oninput="calcPartner()">
+        </div>
+      </div>
+
+      <div id="partner-result" style="display:none;">
+        <div class="result-card">
+          <div class="result-label" id="partner-result-label">合作開團價</div>
+          <div class="result-price" id="partner-result-price">NT$ —</div>
+          <div id="partner-formula-text" style="font-size:12px;opacity:.85;margin-top:4px;line-height:1.6;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">費用明細</div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">商品成本</span>
+            <span class="breakdown-value" id="p-cost">—</span>
+          </div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">國際運費</span>
+            <span class="breakdown-value" id="p-intl-ship">—</span>
+          </div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label">關稅</span>
+            <span class="breakdown-value" id="p-tariff">—</span>
+          </div>
+          <div class="breakdown-row cost">
+            <span class="breakdown-label" id="p-service-label">服務費</span>
+            <span class="breakdown-value" id="p-service-fee">—</span>
+          </div>
+          <div class="breakdown-row cost" id="p-inspection-row">
+            <span class="breakdown-label">拆檢費</span>
+            <span class="breakdown-value" id="p-inspection-fee">—</span>
+          </div>
+          <div class="breakdown-row">
+            <span class="breakdown-label">營業稅（5%）</span>
+            <span class="breakdown-value" id="p-after-tax">—</span>
+          </div>
+          <div class="breakdown-row total">
+            <span class="breakdown-label">金流手續費（1%）</span>
+            <span class="breakdown-value" id="p-final">—</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">記錄此報價（選填）</div>
+          <div class="form-row">
+            <label class="form-label">客人／合作方</label>
+            <input type="text" class="form-input" id="partner-customer" placeholder="可留空">
+          </div>
+          <div class="form-row">
+            <label class="form-label">備註</label>
+            <input type="text" class="form-input" id="partner-notes" placeholder="可留空">
+          </div>
+          <button class="btn btn-primary" onclick="saveRecord('partner')">💾 儲存紀錄</button>
+        </div>
+      </div>
+
+      <div id="partner-empty" class="empty-state" style="display:none;">
+        <div class="empty-icon">🤝</div>
+        <p>選擇合作對象並輸入定價</p>
+      </div>
+    </section>
+
+    <!-- ====== TAB: 代運計價 ====== -->
+    <section id="tab-forward" class="tab-content">
+      <div class="alert alert-info">📬 代運計價：幫客人代收轉寄</div>
+
+      <div class="card">
+        <div class="card-title">代運資訊</div>
+        <div class="form-row-2">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">客人姓名</label>
+            <input type="text" class="form-input" id="forward-customer" placeholder="填寫客人名稱">
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">實際運回日期</label>
+            <input type="date" class="form-input" id="forward-return-date">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:10px;">
+          <label class="form-label">來源地區</label>
+          <select class="form-input" id="forward-origin" onchange="calcForward()">
+            <option value="korea">🇰🇷 韓國</option>
+            <option value="china_normal">🇨🇳 中國（普貨）</option>
+            <option value="china_special">🇨🇳 中國（特貨）</option>
+            <option value="japan">🇯🇵 日本</option>
+          </select>
+        </div>
+        <div class="form-row-2">
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">實際重量（KG）</label>
+            <input type="number" class="form-input" id="forward-weight" placeholder="0.0" step="0.05" inputmode="decimal" oninput="calcForward()">
+          </div>
+          <div class="form-row" style="margin-bottom:0">
+            <label class="form-label">包裹數量</label>
+            <input type="number" class="form-input" id="forward-count" placeholder="1" min="1" inputmode="numeric" oninput="calcForward()">
+          </div>
+        </div>
+      </div>
+
+      <div id="forward-result" style="display:none;">
+        <div class="result-card">
+          <div class="result-label">代運費用</div>
+          <div class="result-price" id="forward-result-price">NT$ —</div>
+          <div id="forward-calc-detail" style="font-size:12px;opacity:.8;margin-top:2px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">記錄此報價（選填）</div>
+          <div class="form-row">
+            <label class="form-label">說明</label>
+            <input type="text" class="form-input" id="forward-desc" placeholder="商品描述">
+          </div>
+          <div class="form-row">
+            <label class="form-label">備註</label>
+            <input type="text" class="form-input" id="forward-notes" placeholder="可留空">
+          </div>
+          <button class="btn btn-primary" onclick="saveRecord('forward')">💾 儲存紀錄</button>
+        </div>
+      </div>
+
+      <div id="forward-empty" class="empty-state">
+        <div class="empty-icon">📦</div>
+        <p>輸入重量即可計算代運費</p>
+      </div>
+    </section>
+
+    <!-- ====== TAB: 記錄 ====== -->
+    <section id="tab-records" class="tab-content">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <input type="text" class="form-input" id="records-search" placeholder="🔍 搜尋客人或商品名稱" oninput="renderRecords()" style="flex:1;margin-bottom:0;">
+        <select class="form-input" id="records-filter" onchange="renderRecords()" style="width:90px;margin-bottom:0;">
+          <option value="">全部</option>
+          <option value="regular">一般</option>
+          <option value="live">連線</option>
+          <option value="partner">開團</option>
+          <option value="forward">代運</option>
+        </select>
+      </div>
+      <button class="btn btn-outline" id="cloud-sync-btn" onclick="loadFromGAS()" style="margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
+        ☁️ 從雲端同步所有人的記錄
+      </button>
+      <div id="records-list"></div>
+    </section>
+
+    <!-- ====== TAB: 設定 ====== -->
+    <section id="tab-settings" class="tab-content">
+
+      <!-- 主控者模式 -->
+      <div class="card" style="margin-bottom:10px;">
+        <div id="master-locked" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:22px;">🔒</span>
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:600;">主控者模式</div>
+            <div style="font-size:11px;color:var(--text-muted);">輸入密碼可推送設定給所有人</div>
+          </div>
+          <input type="password" class="form-input" id="master-pw-input" placeholder="密碼"
+            style="width:100px;margin-bottom:0;" onkeydown="if(event.key==='Enter')unlockMaster()">
+          <button class="btn btn-outline btn-sm" onclick="unlockMaster()">解鎖</button>
+        </div>
+        <div id="master-unlocked" style="display:none;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:22px;">🔓</span>
+            <div style="font-size:14px;font-weight:700;color:var(--success);">主控者模式已開啟</div>
+            <button class="btn btn-outline btn-sm" onclick="lockMaster()" style="margin-left:auto;">鎖定</button>
+          </div>
+          <button class="btn btn-primary" onclick="pushSettingsToCloud()">📤 推送設定給所有人</button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">
+            儲存設定後點此推送，所有人下次開 APP 自動套用
+          </div>
+        </div>
+      </div>
+
+      <!-- 匯率 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>💱 匯率設定（一般定價）</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body open">
+          <div class="setting-note" style="padding:6px 0 8px;color:var(--text-muted);font-size:12px;">用於一般定價（含國際運費/關稅）</div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇰🇷 韓幣（KRW）</div><div class="setting-note">1 KRW = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-rate-KRW" step="0.00001" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇯🇵 日幣（線上自訂）</div><div class="setting-note">1 JPY = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-rate-JPY" step="0.001" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇯🇵 日幣（小幫手代訂）</div><div class="setting-note">1 JPY = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-rate-JPY-helper" step="0.001" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 人民幣（CNY）</div><div class="setting-note">1 CNY = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-rate-CNY" step="0.01" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇭🇰 港幣（HKD）</div><div class="setting-note">1 HKD = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-rate-HKD" step="0.01" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 連線匯率 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>✈️ 匯率設定（連線／親揹）</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-note" style="padding:6px 0 8px;color:var(--text-muted);font-size:12px;">用於連線定價（不含國際運費/關稅），如日幣線下匯率與一般不同</div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇰🇷 韓幣（KRW）</div><div class="setting-note">1 KRW = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-live-rate-KRW" step="0.00001" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇯🇵 日幣（JPY）</div><div class="setting-note">1 JPY = ? TWD（線下）</div></div>
+            <input type="number" class="setting-input" id="s-live-rate-JPY" step="0.001" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 人民幣（CNY）</div><div class="setting-note">1 CNY = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-live-rate-CNY" step="0.01" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇭🇰 港幣（HKD）</div><div class="setting-note">1 HKD = ? TWD</div></div>
+            <input type="number" class="setting-input" id="s-live-rate-HKD" step="0.01" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 國際運費 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>✈️ 國際運費（TWD/KG）</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-row">
+            <div><div class="setting-label">🇰🇷 韓國</div></div>
+            <input type="number" class="setting-input" id="s-ship-korea" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 中國普貨</div></div>
+            <input type="number" class="setting-input" id="s-ship-china_normal" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 中國特貨</div></div>
+            <input type="number" class="setting-input" id="s-ship-china_special" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇯🇵 日本</div></div>
+            <input type="number" class="setting-input" id="s-ship-japan" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇭🇰 香港</div></div>
+            <input type="number" class="setting-input" id="s-ship-hk" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 關稅 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>🏛️ 關稅（TWD/KG）</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-note" style="padding:6px 0 8px;color:var(--text-muted);font-size:12px;">按重量固定收費，填 0 表示包稅或免關稅</div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇰🇷 韓國</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-tariff-korea" step="1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 中國普貨</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-tariff-china_normal" step="1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 中國特貨</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-tariff-china_special" step="1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇯🇵 日本</div><div class="setting-note">包稅填 0</div></div>
+            <input type="number" class="setting-input" id="s-tariff-japan" step="1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇭🇰 香港</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-tariff-hk" step="1" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 費率 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>💰 費率設定</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-row">
+            <div><div class="setting-label">營業稅率（%）</div></div>
+            <input type="number" class="setting-input" id="s-biz-tax" step="0.1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">金流手續費率（%）</div></div>
+            <input type="number" class="setting-input" id="s-payment-fee" step="0.1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">目標淨利率 — 一般定價（%）</div></div>
+            <input type="number" class="setting-input" id="s-target-margin-regular" step="1" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">目標淨利率 — 連線定價（%）</div></div>
+            <input type="number" class="setting-input" id="s-target-margin-live" step="1" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 階梯淨利率 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>📊 階梯淨利率設定</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">啟用階梯淨利率</div>
+              <div class="setting-note">依成本高低自動套用不同淨利目標</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="s-use-tiered" onchange="onTieredToggle()">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div id="tiered-settings-body">
+            <div class="tiered-sub">成本由低到高逐階比對，超出所有門檻套用最後一階</div>
+            <div class="section-title" style="margin:8px 0 4px;">🧮 一般定價</div>
+            <div id="tiered-regular-rows"></div>
+            <div class="divider" style="margin:8px 0;"></div>
+            <div class="section-title" style="margin:4px 0 4px;">✈️ 連線定價</div>
+            <div id="tiered-live-rows"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 合作開團 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>🤝 合作開團設定</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div id="partner-settings-list"></div>
+          <button class="btn btn-outline btn-sm" onclick="addPartner()" style="margin-top:8px;margin-bottom:8px;">＋ 新增合作對象</button>
+        </div>
+      </div>
+
+      <!-- 合作開團運費 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>🤝 合作開團運費（包稅，TWD/KG）</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-note" style="padding:6px 0 8px;color:var(--text-muted);font-size:12px;">合作開團統一費率，含運費＋關稅，費率或說明文字可依實際情況調整</div>
+          <div class="setting-row">
+            <div><div class="setting-label">每 KG 費率（NT$）</div></div>
+            <input type="number" class="setting-input" id="s-partner-ship-rate" inputmode="decimal">
+          </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;">
+            <div class="setting-label" style="margin-bottom:6px;">費率說明</div>
+            <input type="text" class="setting-input wide" id="s-partner-ship-label" placeholder="例：中國海運普貨（包稅）">
+          </div>
+        </div>
+      </div>
+
+      <!-- 代運費率 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>📦 代運費率（TWD/KG，包稅）</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="setting-note" style="padding:6px 0 8px;color:var(--text-muted);font-size:12px;">代運費＝重量 × 每KG費率（已含稅）</div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇰🇷 韓國</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-fwd-rate-korea" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 中國普貨</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-fwd-rate-china_normal" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇨🇳 中國特貨</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-fwd-rate-china_special" inputmode="decimal">
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">🇯🇵 日本空運</div><div class="setting-note">每 KG NT$</div></div>
+            <input type="number" class="setting-input" id="s-fwd-rate-japan" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+
+      <!-- 雲端同步 -->
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <span>☁️ 雲端記錄同步</span><span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <div class="alert alert-warning" style="margin-bottom:10px;">
+            需先部署 Google Apps Script（請參考下方說明）
+          </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;">
+            <div class="setting-label">我的名字 <span style="font-weight:400;font-size:11px;color:var(--text-muted);">（會顯示在雲端記錄的「記錄者」欄）</span></div>
+            <input type="text" class="setting-input wide" id="s-saved-by" placeholder="例：小美、阿志">
+          </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;">
+            <div class="setting-label">Google Apps Script 網址</div>
+            <div class="setting-note" style="margin-bottom:6px;">部署後的 Web App URL</div>
+            <input type="url" class="setting-input wide" id="s-gas-url" placeholder="https://script.google.com/macros/s/...">
+          </div>
+          <div class="setting-row" style="flex-direction:column;align-items:flex-start;">
+            <div class="setting-label" style="margin-bottom:6px;">記錄試算表連結（選填）</div>
+            <input type="url" class="setting-input wide" id="s-sheet-url" placeholder="Google Sheet URL（方便開啟查看）">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-outline btn-sm" id="open-sheet-btn" onclick="openSheet()">📊 開啟記錄表</button>
+            <button class="btn btn-outline btn-sm" id="gas-test-btn" onclick="testGASConnection()">🔗 測試連線</button>
+          </div>
+          <div id="gas-setup-info" style="margin-top:12px;">
+            <div class="setting-label" style="margin-bottom:6px;">⚙️ 部署步驟</div>
+            <ol style="font-size:12px;color:var(--text-muted);padding-left:18px;line-height:1.8;">
+              <li>開啟 <a href="https://script.google.com" target="_blank" style="color:var(--primary)">script.google.com</a></li>
+              <li>新增專案，貼上 <strong>gas-script.gs</strong> 的內容</li>
+              <li>部署 → 新增部署 → 類型選「網頁應用程式」</li>
+              <li>執行身份：我自己 / 存取權：任何人</li>
+              <li>複製 URL 貼到上方欄位</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- 動作 -->
+      <div class="card" style="margin-top:10px;">
+        <button class="btn btn-primary" onclick="saveSettings()" style="margin-bottom:8px;">💾 儲存所有設定</button>
+        <button class="btn btn-outline" onclick="exportData()" style="margin-bottom:8px;">📤 匯出所有記錄（JSON）</button>
+        <button class="btn btn-danger" onclick="resetSettings()">↩ 恢復預設值</button>
+      </div>
+
+      <div id="settings-saved-msg" class="alert alert-success" style="display:none;">✅ 設定已儲存</div>
+    </section>
+
+  </main><!-- end main -->
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-tab="regular" onclick="switchTab('regular',this)">
+      <span class="nav-icon">🧮</span>一般
+    </button>
+    <button class="nav-btn" data-tab="live" onclick="switchTab('live',this)">
+      <span class="nav-icon">✈️</span>連線
+    </button>
+    <button class="nav-btn" data-tab="partner" onclick="switchTab('partner',this)">
+      <span class="nav-icon">🤝</span>開團
+    </button>
+    <button class="nav-btn" data-tab="forward" onclick="switchTab('forward',this)">
+      <span class="nav-icon">📦</span>代運
+    </button>
+    <button class="nav-btn" data-tab="records" onclick="switchTab('records',this)">
+      <span class="nav-icon">📋</span>記錄
+    </button>
+    <button class="nav-btn" data-tab="settings" onclick="switchTab('settings',this)">
+      <span class="nav-icon">⚙️</span>設定
+    </button>
+  </nav>
+</div><!-- end app -->
+
+<!-- RECORD DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="modal-title">報價詳情</div>
+      <span class="modal-close" onclick="closeModal('detail-modal')">✕</span>
+    </div>
+    <div id="detail-modal-content"></div>
+    <button class="btn btn-danger" id="detail-delete-btn" style="margin-top:12px;">🗑️ 刪除此記錄</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DEFAULTS & CONSTANTS
+// ============================================================
+const DEFAULT_SETTINGS = {
+  // 一般定價匯率（含國際運費/關稅）
+  rates: { KRW: 0.02381, JPY: 0.23, JPY_helper: 0.215, CNY: 4.7, HKD: 4.55, TWD: 1 },
+  // 連線/親揹匯率（通常與一般匯率不同，如日幣線下）
+  live_rates: { KRW: 0.02381, JPY: 0.26, CNY: 4.7, HKD: 4.55, TWD: 1 },
+  shipping: { korea:170, china_normal:130, china_special:200, japan:150, hk:100 },
+  // 關稅：固定金額 TWD/KG（非百分比）
+  tariff: { korea:55, china_normal:15, china_special:15, japan:0, hk:0 },
+  fees: {
+    business_tax:5, payment_fee:1.5,
+    target_margin_regular:10, target_margin_live:10,
+    use_tiered: true,
+    tiered_regular: [
+      {max:299,  rate:20},
+      {max:399,  rate:17},
+      {max:499,  rate:12},
+      {max:699,  rate:10},
+      {max:899,  rate:8},
+      {max:999,  rate:6.5},
+      {max:1999, rate:5},
+      {max:3000, rate:3},
+      {max:4999, rate:2},
+      {max:0,    rate:1.5}
+    ],
+    tiered_live: [
+      {max:299,  rate:20},
+      {max:399,  rate:17},
+      {max:499,  rate:12},
+      {max:699,  rate:10},
+      {max:899,  rate:8},
+      {max:999,  rate:6.5},
+      {max:1999, rate:5},
+      {max:3000, rate:3},
+      {max:4999, rate:2},
+      {max:0,    rate:1.5}
+    ]
+  },
+  partners: [
+    { id:'p1', name:'渡月草', service_fee:0.05, inspection_fee:30 },
+    { id:'p2', name:'佐佐',   service_fee:0.10, inspection_fee:0  }
+  ],
+  forwarding: {
+    korea:         { rate:260 },
+    china_normal:  { rate:160 },
+    china_special: { rate:200 },
+    japan:         { rate:300 },
+    hk:            { rate:120 }
+  },
+  // 合作開團專用運費（包稅，TWD/KG）
+  partner_shipping: { rate: 96, label: '中國海運普貨（包稅）' },
+  gas_url: '',
+  sheet_url: '',
+  saved_by: ''
+};
+
+const SHIP_LABELS = {
+  korea:'韓國', china_normal:'中國普貨', china_special:'中國特貨',
+  japan:'日本', hk:'香港'
+};
+const TYPE_LABELS = { regular:'一般定價', live:'連線定價', partner:'合作開團', forward:'代運計價' };
+const CURRENCY_LABELS = { KRW:'韓幣', JPY:'日幣', CNY:'人民幣', HKD:'港幣', TWD:'台幣' };
+
+// ============================================================
+// STATE
+// ============================================================
+let settings = {};
+let records = [];
+let selectedCurrency = { regular:'KRW', live:'KRW' };
+let selectedPartner = null;
+let masterMode = false;
+let selectedJPYMode = 'online'; // 'online' | 'helper'
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  loadSettings();
+  loadRecords();
+  renderPartnerCards();
+  renderPartnerSettings();
+  bindCurrencyTabs('regular-currency-tabs', 'regular');
+  bindCurrencyTabs('live-currency-tabs', 'live');
+  fillSettingsUI();
+  renderRecords();
+  syncSettingsFromCloud();
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function loadSettings() {
+  try {
+    const s = localStorage.getItem('rooc_settings');
+    if (s) {
+      settings = JSON.parse(s);
+      settings = deepMerge(DEFAULT_SETTINGS, settings);
+    } else {
+      settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    }
+  } catch(e) {
+    settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  }
+  // 若 localStorage 被清除，從 URL hash 還原 GAS 網址
+  if (!settings.gas_url) {
+    const m = window.location.hash.match(/[#&]g=([^&]+)/);
+    if (m) {
+      settings.gas_url = decodeURIComponent(m[1]);
+      saveSettingsToStorage();
+    }
+  }
+}
+
+function deepMerge(base, override) {
+  const result = JSON.parse(JSON.stringify(base));
+  for (const k in override) {
+    if (override[k] !== null && typeof override[k] === 'object' && !Array.isArray(override[k])) {
+      result[k] = deepMerge(result[k] || {}, override[k]);
+    } else {
+      result[k] = override[k];
+    }
+  }
+  return result;
+}
+
+function saveSettingsToStorage() {
+  localStorage.setItem('rooc_settings', JSON.stringify(settings));
+}
+
+function fillSettingsUI() {
+  const r = settings.rates;
+  sv('s-rate-KRW', r.KRW);
+  sv('s-rate-JPY', r.JPY);
+  sv('s-rate-JPY-helper', r.JPY_helper ?? DEFAULT_SETTINGS.rates.JPY_helper);
+  sv('s-rate-CNY', r.CNY);
+  sv('s-rate-HKD', r.HKD);
+
+  const lr = settings.live_rates || DEFAULT_SETTINGS.live_rates;
+  sv('s-live-rate-KRW', lr.KRW);
+  sv('s-live-rate-JPY', lr.JPY);
+  sv('s-live-rate-CNY', lr.CNY);
+  sv('s-live-rate-HKD', lr.HKD);
+
+  const sh = settings.shipping;
+  Object.keys(sh).forEach(k => sv('s-ship-'+k, sh[k]));
+
+  const t = settings.tariff;
+  Object.keys(t).forEach(k => sv('s-tariff-'+k, t[k]));
+
+  sv('s-biz-tax', settings.fees.business_tax);
+  sv('s-payment-fee', settings.fees.payment_fee);
+  sv('s-target-margin-regular', settings.fees.target_margin_regular ?? 10);
+  sv('s-target-margin-live', settings.fees.target_margin_live ?? 10);
+
+  const fw = settings.forwarding;
+  Object.keys(fw).forEach(k => sv('s-fwd-rate-'+k, fw[k].rate));
+
+  const ps = settings.partner_shipping || DEFAULT_SETTINGS.partner_shipping;
+  sv('s-partner-ship-rate', ps.rate);
+  sv('s-partner-ship-label', ps.label || '');
+
+  sv('s-gas-url', settings.gas_url || '');
+  sv('s-sheet-url', settings.sheet_url || '');
+  sv('s-saved-by', settings.saved_by || '');
+
+  // 階梯淨利率
+  document.getElementById('s-use-tiered').checked = settings.fees.use_tiered ?? true;
+  renderTieredSettingsUI();
+  onTieredToggle();
+}
+
+function saveSettings() {
+  settings.rates.KRW        = gv('s-rate-KRW');
+  settings.rates.JPY        = gv('s-rate-JPY');
+  settings.rates.JPY_helper = gv('s-rate-JPY-helper') ?? DEFAULT_SETTINGS.rates.JPY_helper;
+  settings.rates.CNY        = gv('s-rate-CNY');
+  settings.rates.HKD        = gv('s-rate-HKD');
+
+  if (!settings.live_rates) settings.live_rates = {};
+  settings.live_rates.KRW = gv('s-live-rate-KRW') ?? DEFAULT_SETTINGS.live_rates.KRW;
+  settings.live_rates.JPY = gv('s-live-rate-JPY') ?? DEFAULT_SETTINGS.live_rates.JPY;
+  settings.live_rates.CNY = gv('s-live-rate-CNY') ?? DEFAULT_SETTINGS.live_rates.CNY;
+  settings.live_rates.HKD = gv('s-live-rate-HKD') ?? DEFAULT_SETTINGS.live_rates.HKD;
+  settings.live_rates.TWD = 1;
+
+  ['korea','china_normal','china_special','japan','hk'].forEach(k => {
+    settings.shipping[k] = gv('s-ship-'+k) || DEFAULT_SETTINGS.shipping[k];
+  });
+
+  ['korea','china_normal','china_special','japan','hk'].forEach(k => {
+    const v = gv('s-tariff-'+k);
+    settings.tariff[k] = (v !== null && !isNaN(v)) ? v : DEFAULT_SETTINGS.tariff[k];
+  });
+
+  settings.fees.business_tax          = gv('s-biz-tax') ?? 5;
+  settings.fees.payment_fee           = gv('s-payment-fee') ?? 1.5;
+  settings.fees.target_margin_regular  = gv('s-target-margin-regular') ?? 10;
+  settings.fees.target_margin_live     = gv('s-target-margin-live') ?? 10;
+
+  // 階梯淨利率
+  settings.fees.use_tiered        = document.getElementById('s-use-tiered').checked;
+  settings.fees.tiered_regular    = saveTierRows('r');
+  settings.fees.tiered_live       = saveTierRows('l');
+
+  ['korea','china_normal','china_special','japan','hk'].forEach(k => {
+    settings.forwarding[k] = settings.forwarding[k] || {};
+    settings.forwarding[k].rate = gv('s-fwd-rate-'+k) || DEFAULT_SETTINGS.forwarding[k].rate;
+  });
+
+  settings.partner_shipping = {
+    rate:  gv('s-partner-ship-rate') || DEFAULT_SETTINGS.partner_shipping.rate,
+    label: document.getElementById('s-partner-ship-label').value.trim() || DEFAULT_SETTINGS.partner_shipping.label
+  };
+
+  settings.gas_url   = document.getElementById('s-gas-url').value.trim();
+  settings.sheet_url = document.getElementById('s-sheet-url').value.trim();
+  settings.saved_by  = document.getElementById('s-saved-by').value.trim();
+  // 把 GAS 網址寫進 URL hash，清除 localStorage 後重開書籤仍可自動還原
+  if (settings.gas_url) {
+    history.replaceState(null, '', '#g=' + encodeURIComponent(settings.gas_url));
+  }
+
+  // Partners from UI
+  const pRows = document.querySelectorAll('.partner-setting-row');
+  settings.partners = [];
+  pRows.forEach(row => {
+    const name    = row.querySelector('.ps-name').value.trim();
+    const svcFee  = parseFloat(row.querySelector('.ps-svc').value) || 0;
+    const inspFee = parseFloat(row.querySelector('.ps-insp').value) || 0;
+    if (name) {
+      settings.partners.push({ id:'p'+Date.now()+Math.random(), name, service_fee: svcFee/100, inspection_fee: inspFee });
+    }
+  });
+
+  saveSettingsToStorage();
+  renderPartnerCards();
+  renderPartnerSettings();
+  updateRateChips();
+
+  const msg = document.getElementById('settings-saved-msg');
+  msg.style.display = 'block';
+  setTimeout(() => msg.style.display = 'none', 2000);
+}
+
+function resetSettings() {
+  if (!confirm('確定要恢復所有預設值嗎？')) return;
+  settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  saveSettingsToStorage();
+  fillSettingsUI();
+  renderPartnerCards();
+  renderPartnerSettings();
+}
+
+function sv(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+function gv(id) {
+  const el = document.getElementById(id);
+  return el ? parseFloat(el.value) : null;
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+  if (tab === 'records') renderRecords();
+  document.getElementById('main-scroll').scrollTop = 0;
+}
+
+function toggleAccordion(header) {
+  header.classList.toggle('open');
+  const body = header.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// ============================================================
+// CURRENCY TABS
+// ============================================================
+function bindCurrencyTabs(containerId, tabKey) {
+  const container = document.getElementById(containerId);
+  container.querySelectorAll('.currency-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      container.querySelectorAll('.currency-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedCurrency[tabKey] = btn.dataset.val;
+      updateRateChips();
+      if (tabKey === 'regular') calcRegular();
+      else calcLive();
+    });
+  });
+}
+
+function setJPYMode(mode) {
+  selectedJPYMode = mode;
+  document.getElementById('regular-jpy-online').classList.toggle('active', mode === 'online');
+  document.getElementById('regular-jpy-helper').classList.toggle('active', mode === 'helper');
+  updateRateChips();
+  calcRegular();
+}
+
+function updateRateChips() {
+  const tabRates = { regular: settings.rates, live: settings.live_rates || settings.rates };
+  ['regular','live'].forEach(k => {
+    const cur = selectedCurrency[k];
+    let rate;
+    if (k === 'regular' && cur === 'JPY') {
+      rate = selectedJPYMode === 'helper'
+        ? (settings.rates.JPY_helper || DEFAULT_SETTINGS.rates.JPY_helper)
+        : (settings.rates.JPY || DEFAULT_SETTINGS.rates.JPY);
+    } else {
+      rate = (tabRates[k] || settings.rates)[cur] || 1;
+    }
+    const chip = document.getElementById(k+'-rate-chip');
+    if (chip) {
+      if (cur === 'TWD') {
+        chip.textContent = '台幣 → 無需換算';
+      } else {
+        const decimals = cur==='KRW' ? 5 : cur==='JPY' ? 3 : 2;
+        const label = k === 'live' ? '連線匯率' : '匯率';
+        const modeTxt = k === 'regular' && cur === 'JPY'
+          ? (selectedJPYMode === 'helper' ? '（小幫手代訂）' : '（線上自訂）') : '';
+        chip.textContent = `${label} 1 ${cur} = ${rate.toFixed(decimals)} TWD${modeTxt}`;
+      }
+    }
+  });
+  // 日幣模式切換鈕：只有選日幣時才顯示
+  const jpyModeEl = document.getElementById('regular-jpy-mode');
+  if (jpyModeEl) jpyModeEl.style.display = selectedCurrency.regular === 'JPY' ? 'block' : 'none';
+}
+
+// ============================================================
+// TIERED MARGIN HELPERS
+// ============================================================
+function getTieredMarginInfo(cost, tiers) {
+  if (!tiers || !tiers.length) return { rate: 10, label: '' };
+  for (let i = 0; i < tiers.length - 1; i++) {
+    if (tiers[i].max > 0 && cost <= tiers[i].max) {
+      return { rate: tiers[i].rate, label: `第${i+1}階（成本 ≤ NT$${tiers[i].max.toLocaleString()}）` };
+    }
+  }
+  return { rate: tiers[tiers.length - 1].rate, label: `第${tiers.length}階（高價段）` };
+}
+
+function getEffectiveMarginRate(cost, tieredKey) {
+  if (settings.fees.use_tiered) {
+    const tiers = settings.fees[tieredKey] || DEFAULT_SETTINGS.fees[tieredKey];
+    return getTieredMarginInfo(cost, tiers);
+  }
+  const flatKey = tieredKey === 'tiered_regular' ? 'target_margin_regular' : 'target_margin_live';
+  return { rate: settings.fees[flatKey] || 10, label: '' };
+}
+
+function renderTieredSettingsUI() {
+  const tr = settings.fees.tiered_regular || DEFAULT_SETTINGS.fees.tiered_regular;
+  const tl = settings.fees.tiered_live    || DEFAULT_SETTINGS.fees.tiered_live;
+  renderTierRows('tiered-regular-rows', 'r', tr);
+  renderTierRows('tiered-live-rows',    'l', tl);
+}
+
+function renderTierRows(containerId, prefix, tiers) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  tiers.forEach((tier, i) => {
+    const isLast = i === tiers.length - 1;
+    const row = document.createElement('div');
+    row.className = 'tiered-row';
+    if (isLast) {
+      row.innerHTML =
+        `<span class="tiered-lbl">成本超出以上 → 目標</span>
+         <input type="number" class="tiered-input" id="s-tr-${prefix}${i+1}-rate"
+           value="${tier.rate}" step="0.1" inputmode="decimal">
+         <span class="tiered-lbl">%</span>`;
+    } else {
+      row.innerHTML =
+        `<span class="tiered-lbl">成本 ≤</span>
+         <input type="number" class="tiered-input" id="s-tr-${prefix}${i+1}-max"
+           value="${tier.max}" inputmode="decimal">
+         <span class="tiered-lbl">NT$ → 目標</span>
+         <input type="number" class="tiered-input" id="s-tr-${prefix}${i+1}-rate"
+           value="${tier.rate}" step="0.1" inputmode="decimal">
+         <span class="tiered-lbl">%</span>`;
+    }
+    container.appendChild(row);
+  });
+}
+
+function saveTierRows(prefix) {
+  const tiers = [];
+  let i = 1;
+  while (true) {
+    const rateEl = document.getElementById(`s-tr-${prefix}${i}-rate`);
+    if (!rateEl) break;
+    const maxEl  = document.getElementById(`s-tr-${prefix}${i}-max`);
+    const rate   = parseFloat(rateEl.value) || 0;
+    if (maxEl) {
+      tiers.push({ max: parseFloat(maxEl.value) || 0, rate });
+    } else {
+      tiers.push({ max: 0, rate }); // last tier, unlimited
+    }
+    i++;
+  }
+  return tiers.length ? tiers : DEFAULT_SETTINGS.fees[prefix === 'r' ? 'tiered_regular' : 'tiered_live'];
+}
+
+function onTieredToggle() {
+  const checked = document.getElementById('s-use-tiered').checked;
+  document.getElementById('tiered-settings-body').style.display = checked ? '' : 'none';
+}
+
+// ============================================================
+// CALCULATORS
+// ============================================================
+function calcRegular() {
+  const price     = parseFloat(document.getElementById('regular-price').value) || 0;
+  const localShip = parseFloat(document.getElementById('regular-local-ship').value) || 0;
+  const weight    = parseFloat(document.getElementById('regular-weight').value) || 0;
+  const shipType  = document.getElementById('regular-ship-type').value;
+  const cur       = selectedCurrency.regular;
+
+  if (price <= 0) {
+    document.getElementById('regular-result').style.display = 'none';
+    document.getElementById('regular-empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('regular-result').style.display = 'block';
+  document.getElementById('regular-empty').style.display = 'none';
+
+  const rate = (cur === 'JPY')
+    ? (selectedJPYMode === 'helper' ? (settings.rates.JPY_helper || DEFAULT_SETTINGS.rates.JPY_helper) : (settings.rates.JPY || DEFAULT_SETTINGS.rates.JPY))
+    : (settings.rates[cur] || 1);
+  const productTWD = Math.round(price * rate);
+  const localTWD   = Math.round(localShip * rate);
+  const shipRate   = settings.shipping[shipType] || 170;
+  const intlTWD    = Math.round(weight * shipRate);
+  // 關稅：固定金額 TWD/KG（按重量計算）
+  const tariffPerKg = settings.tariff[shipType] ?? 55;
+  const tariff      = Math.round(weight * tariffPerKg);
+  const totalCost  = productTWD + localTWD + intlTWD + tariff;
+
+  const btRate  = (settings.fees.business_tax || 5)  / 100;
+  const pfRate  = (settings.fees.payment_fee  || 1.5)/ 100;
+  const tierInfo = getEffectiveMarginRate(totalCost, 'tiered_regular');
+  const tmRate   = tierInfo.rate / 100;
+
+  const overrideEl = document.getElementById('regular-override');
+  let finalPrice = parseFloat(overrideEl.value);
+  if (!finalPrice || finalPrice <= 0) {
+    const raw = totalCost / (1 - btRate - pfRate - tmRate);
+    finalPrice = Math.ceil(raw);
+  }
+
+  const bizTax    = Math.round(finalPrice * btRate);
+  const payFee    = Math.round(finalPrice * pfRate);
+  const netProfit = finalPrice - totalCost - bizTax - payFee;
+  const marginPct = totalCost > 0 ? Math.round(netProfit / finalPrice * 100) : 0;
+
+  // Update UI
+  const friendPriceR = finalPrice - bizTax - payFee;
+
+  document.getElementById('regular-suggested-price').textContent = 'NT$ ' + finalPrice.toLocaleString();
+  document.getElementById('regular-friend-price').textContent    = 'NT$ ' + friendPriceR.toLocaleString();
+  document.getElementById('r-product-twd').textContent = 'NT$ ' + productTWD.toLocaleString();
+  document.getElementById('r-local-twd').textContent   = 'NT$ ' + localTWD.toLocaleString();
+  document.getElementById('r-intl-twd').textContent    = 'NT$ ' + intlTWD.toLocaleString();
+  document.getElementById('r-tariff').textContent      = 'NT$ ' + tariff.toLocaleString();
+  document.getElementById('r-total-cost').textContent  = 'NT$ ' + totalCost.toLocaleString();
+  document.getElementById('r-biz-tax').textContent     = 'NT$ ' + bizTax.toLocaleString();
+  document.getElementById('r-payment-fee').textContent = 'NT$ ' + payFee.toLocaleString();
+  document.getElementById('r-net-profit').textContent  = 'NT$ ' + netProfit.toLocaleString();
+  document.getElementById('regular-margin-badge').innerHTML = marginBadge(marginPct, tierInfo.label);
+}
+
+function calcLive() {
+  const price     = parseFloat(document.getElementById('live-price').value) || 0;
+  const cur = selectedCurrency.live;
+
+  if (price <= 0) {
+    document.getElementById('live-result').style.display = 'none';
+    document.getElementById('live-empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('live-result').style.display = 'block';
+  document.getElementById('live-empty').style.display = 'none';
+
+  // 連線定價使用獨立匯率 live_rates
+  const rate       = (settings.live_rates || settings.rates)[cur] || 1;
+  const productTWD = Math.round(price * rate);
+  const totalCost  = productTWD;
+
+  const btRate   = (settings.fees.business_tax || 5)  / 100;
+  const pfRate   = (settings.fees.payment_fee  || 1.5)/ 100;
+  const tierInfo = getEffectiveMarginRate(totalCost, 'tiered_live');
+  const tmRate   = tierInfo.rate / 100;
+
+  const overrideEl = document.getElementById('live-override');
+  let finalPrice = parseFloat(overrideEl.value);
+  if (!finalPrice || finalPrice <= 0) {
+    const raw = totalCost / (1 - btRate - pfRate - tmRate);
+    finalPrice = Math.ceil(raw);
+  }
+
+  const bizTax    = Math.round(finalPrice * btRate);
+  const payFee    = Math.round(finalPrice * pfRate);
+  const netProfit = finalPrice - totalCost - bizTax - payFee;
+  const marginPct = totalCost > 0 ? Math.round(netProfit / finalPrice * 100) : 0;
+
+  const friendPriceL = finalPrice - bizTax - payFee;
+
+  document.getElementById('live-suggested-price').textContent = 'NT$ ' + finalPrice.toLocaleString();
+  document.getElementById('live-friend-price').textContent    = 'NT$ ' + friendPriceL.toLocaleString();
+  document.getElementById('l-product-twd').textContent = 'NT$ ' + productTWD.toLocaleString();
+  document.getElementById('l-total-cost').textContent  = 'NT$ ' + totalCost.toLocaleString();
+  document.getElementById('l-biz-tax').textContent     = 'NT$ ' + bizTax.toLocaleString();
+  document.getElementById('l-payment-fee').textContent = 'NT$ ' + payFee.toLocaleString();
+  document.getElementById('l-net-profit').textContent  = 'NT$ ' + netProfit.toLocaleString();
+  document.getElementById('live-margin-badge').innerHTML = marginBadge(marginPct, tierInfo.label);
+}
+
+function calcPartner() {
+  const cost   = parseFloat(document.getElementById('partner-cost').value) || 0;
+  const weight = parseFloat(document.getElementById('partner-weight').value) || 0;
+
+  // 合作開團專用費率（包稅，含運費+關稅合一）
+  const ps = settings.partner_shipping || DEFAULT_SETTINGS.partner_shipping;
+  // 更新費率 chip
+  const chip = document.getElementById('partner-ship-rate-chip');
+  if (chip) chip.textContent = `${ps.label || '合作開團運費'}　NT$${ps.rate}/KG（包稅）`;
+
+  if (!selectedPartner || cost <= 0) {
+    document.getElementById('partner-result').style.display = 'none';
+    return;
+  }
+  document.getElementById('partner-result').style.display = 'block';
+
+  const p = selectedPartner;
+
+  // 合作開團運費包稅（運費＋關稅合一費率）
+  const intlShip  = Math.round(weight * ps.rate);
+  const tariff    = 0; // 已包含在 partner_shipping 費率內
+
+  // 服務費 = 成本 × 服務費率
+  const serviceFee    = Math.round(cost * p.service_fee);
+  // 拆檢費（渡月草30，佐佐0）
+  const inspectionFee = p.inspection_fee || 0;
+  // 小計
+  const subtotal   = cost + intlShip + tariff + serviceFee + inspectionFee;
+  // × 營業稅 1.05 × 金流 1.01，無條件進位到10元
+  const afterTax   = subtotal * 1.05;
+  const finalPrice = Math.ceil(afterTax * 1.01);
+
+  document.getElementById('partner-result-label').textContent = p.name + ' 合作開團價';
+  document.getElementById('partner-result-price').textContent = 'NT$ ' + finalPrice.toLocaleString();
+
+  // 公式說明
+  const svcPct = (p.service_fee * 100) + '%';
+  let formulaText = `(成本${cost} + 運費${intlShip} + 關稅${tariff} + 服務費${serviceFee}`;
+  if (inspectionFee) formulaText += ` + 拆檢${inspectionFee}`;
+  formulaText += `) × 營業稅1.05 × 金流1.01 = ${finalPrice}`;
+  document.getElementById('partner-formula-text').textContent = formulaText;
+
+  // 明細
+  document.getElementById('p-cost').textContent          = 'NT$ ' + cost.toLocaleString();
+  document.getElementById('p-intl-ship').textContent     = 'NT$ ' + intlShip.toLocaleString() + `（${weight}KG × NT$${ps.rate}，包稅）`;
+  document.getElementById('p-tariff').textContent        = '已含於運費中';
+  document.getElementById('p-service-label').textContent = `服務費（${svcPct}）`;
+  document.getElementById('p-service-fee').textContent   = 'NT$ ' + serviceFee.toLocaleString();
+  document.getElementById('p-inspection-row').style.display = inspectionFee ? '' : 'none';
+  document.getElementById('p-inspection-fee').textContent   = 'NT$ ' + inspectionFee;
+  document.getElementById('p-after-tax').textContent     = 'NT$ ' + Math.round(afterTax).toLocaleString();
+  document.getElementById('p-final').textContent         = 'NT$ ' + finalPrice.toLocaleString();
+}
+
+function calcForward() {
+  const weight = parseFloat(document.getElementById('forward-weight').value) || 0;
+  const count  = parseInt(document.getElementById('forward-count').value) || 1;
+  const origin = document.getElementById('forward-origin').value;
+
+  if (weight <= 0) {
+    document.getElementById('forward-result').style.display = 'none';
+    document.getElementById('forward-empty').style.display = 'block';
+    return;
+  }
+  document.getElementById('forward-result').style.display = 'block';
+  document.getElementById('forward-empty').style.display = 'none';
+
+  const fwd = settings.forwarding[origin] || { rate:260 };
+  const totalWeight = weight * count;
+  const fee = Math.round(totalWeight * fwd.rate);
+
+  document.getElementById('forward-result-price').textContent = 'NT$ ' + fee.toLocaleString();
+  document.getElementById('forward-calc-detail').textContent =
+    `${count} 件 × ${weight}KG = ${totalWeight.toFixed(2)}KG × NT$${fwd.rate}/KG（包稅）`;
+}
+
+function marginBadge(pct, tierLabel) {
+  let cls = pct >= 12 ? 'badge-ok' : pct >= 6 ? 'badge-low' : 'badge-bad';
+  let html = `<span class="badge ${cls}">淨利 ${pct}%</span>`;
+  if (tierLabel) html += ` <span style="font-size:11px;opacity:.75;">${tierLabel}</span>`;
+  return html;
+}
+
+function clearOverride(inputId, calcFn) {
+  document.getElementById(inputId).value = '';
+  window[calcFn]();
+}
+
+// ============================================================
+// PARTNER CARDS
+// ============================================================
+function renderPartnerCards() {
+  const list = document.getElementById('partner-list');
+  if (!list) return;
+  list.innerHTML = '';
+  (settings.partners || []).forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'partner-card' + (selectedPartner && selectedPartner.id === p.id ? ' selected' : '');
+    const svcPct = (p.service_fee * 100) + '%';
+    const inspTxt = p.inspection_fee ? `＋拆檢費 NT$${p.inspection_fee}` : '';
+    div.innerHTML = `<div class="partner-name">${p.name}</div>
+      <div class="partner-mult">服務費 ${svcPct}${inspTxt}，+ 營業稅5% + 金流1%</div>`;
+    div.addEventListener('click', () => {
+      selectedPartner = p;
+      renderPartnerCards();
+      calcPartner();
+    });
+    list.appendChild(div);
+  });
+}
+
+function renderPartnerSettings() {
+  const list = document.getElementById('partner-settings-list');
+  if (!list) return;
+  list.innerHTML = '';
+  (settings.partners || []).forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'partner-setting-row setting-row';
+    row.style.flexDirection = 'column';
+    row.style.alignItems = 'flex-start';
+    row.innerHTML = `
+      <div style="display:flex;gap:6px;width:100%;align-items:center;padding:4px 0;flex-wrap:wrap;">
+        <input type="text" class="form-input ps-name" placeholder="合作對象名稱" value="${p.name}" style="flex:1;min-width:100px;margin-bottom:0;">
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">服務費%</span>
+          <input type="number" class="form-input ps-svc" placeholder="%" value="${Math.round((p.service_fee||0)*100)}" step="1" style="width:60px;margin-bottom:0;" inputmode="decimal">
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;">拆檢費</span>
+          <input type="number" class="form-input ps-insp" placeholder="0" value="${p.inspection_fee||0}" step="1" style="width:60px;margin-bottom:0;" inputmode="decimal">
+        </div>
+        <button class="btn btn-sm" onclick="removePartner(${i})" style="background:#FEE2E2;color:#DC2626;width:auto;padding:6px 10px;">✕</button>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function addPartner() {
+  settings.partners.push({ id:'p'+Date.now(), name:'新合作對象', service_fee:0.05, inspection_fee:0 });
+  renderPartnerSettings();
+}
+
+function removePartner(index) {
+  settings.partners.splice(index, 1);
+  renderPartnerSettings();
+  renderPartnerCards();
+}
+
+// ============================================================
+// RECORDS
+// ============================================================
+function loadRecords() {
+  try {
+    const r = localStorage.getItem('rooc_records');
+    records = r ? JSON.parse(r) : [];
+  } catch(e) { records = []; }
+}
+
+function saveRecordsToStorage() {
+  localStorage.setItem('rooc_records', JSON.stringify(records));
+}
+
+function saveRecord(type) {
+  let record = { id: Date.now().toString(), type, timestamp: new Date().toISOString(), savedBy: settings.saved_by || '' };
+
+  if (type === 'regular') {
+    const price     = parseFloat(document.getElementById('regular-price').value) || 0;
+    const localShip = parseFloat(document.getElementById('regular-local-ship').value) || 0;
+    const weight    = parseFloat(document.getElementById('regular-weight').value) || 0;
+    const shipType  = document.getElementById('regular-ship-type').value;
+    const cur       = selectedCurrency.regular;
+    const rate = (cur === 'JPY')
+      ? (selectedJPYMode === 'helper' ? (settings.rates.JPY_helper || DEFAULT_SETTINGS.rates.JPY_helper) : (settings.rates.JPY || DEFAULT_SETTINGS.rates.JPY))
+      : (settings.rates[cur] || 1);
+    const productTWD = Math.round(price * rate);
+    const localTWD   = Math.round(localShip * rate);
+    const intlTWD    = Math.round(weight * (settings.shipping[shipType] || 170));
+    const tariff     = Math.round(weight * (settings.tariff[shipType] ?? 55));
+    const totalCost  = productTWD + localTWD + intlTWD + tariff;
+    const btRate     = (settings.fees.business_tax || 5) / 100;
+    const pfRate     = (settings.fees.payment_fee  || 1.5) / 100;
+    const tmRate     = getEffectiveMarginRate(totalCost, 'tiered_regular').rate / 100;
+    let finalPrice   = parseFloat(document.getElementById('regular-override').value);
+    if (!finalPrice) finalPrice = Math.ceil(totalCost / (1 - btRate - pfRate - tmRate));
+    const bizTaxR    = Math.round(finalPrice * btRate);
+    const payFeeR    = Math.round(finalPrice * pfRate);
+    const netProfit  = finalPrice - totalCost - bizTaxR - payFeeR;
+    const marginPct  = Math.round(netProfit / finalPrice * 100);
+    const friendPrice = finalPrice - bizTaxR - payFeeR;
+
+    Object.assign(record, {
+      product: document.getElementById('regular-product-name').value.trim(),
+      url: document.getElementById('regular-url').value.trim(),
+      customer: document.getElementById('regular-customer').value.trim(),
+      notes: document.getElementById('regular-notes').value.trim(),
+      currency: cur, originalPrice: price, localShipOriginal: localShip, rate,
+      productTWD, localShipTWD: localTWD, shippingType: shipType,
+      weight, intlShipTWD: intlTWD, tariff, totalCost,
+      finalPrice, friendPrice, netProfit, marginPct
+    });
+  } else if (type === 'live') {
+    const price     = parseFloat(document.getElementById('live-price').value) || 0;
+    const cur        = selectedCurrency.live;
+    const rate       = (settings.live_rates || settings.rates)[cur] || 1;
+    const productTWD = Math.round(price * rate);
+    const totalCost  = productTWD;
+    const btRate     = (settings.fees.business_tax || 5) / 100;
+    const pfRate     = (settings.fees.payment_fee  || 1.5) / 100;
+    const tmRate     = getEffectiveMarginRate(totalCost, 'tiered_live').rate / 100;
+    let finalPrice   = parseFloat(document.getElementById('live-override').value);
+    if (!finalPrice) finalPrice = Math.ceil(totalCost / (1 - btRate - pfRate - tmRate));
+    const bizTaxL    = Math.round(finalPrice * btRate);
+    const payFeeL    = Math.round(finalPrice * pfRate);
+    const netProfit  = finalPrice - totalCost - bizTaxL - payFeeL;
+    const marginPct  = Math.round(netProfit / finalPrice * 100);
+    const friendPrice = finalPrice - bizTaxL - payFeeL;
+
+    Object.assign(record, {
+      product: document.getElementById('live-product-name').value.trim(),
+      customer: document.getElementById('live-customer').value.trim(),
+      notes: document.getElementById('live-notes').value.trim(),
+      currency: cur, originalPrice: price, rate,
+      productTWD, totalCost,
+      finalPrice, friendPrice, netProfit, marginPct
+    });
+  } else if (type === 'partner') {
+    const cost     = parseFloat(document.getElementById('partner-cost').value) || 0;
+    const weight   = parseFloat(document.getElementById('partner-weight').value) || 0;
+    const p        = selectedPartner || { name:'未知', service_fee:0.05, inspection_fee:0 };
+    const ps       = settings.partner_shipping || DEFAULT_SETTINGS.partner_shipping;
+    const intlShip = Math.round(weight * ps.rate);
+    const tariff   = 0; // 包稅，含於運費內
+    const serviceFee    = Math.round(cost * p.service_fee);
+    const inspectionFee = p.inspection_fee || 0;
+    const subtotal      = cost + intlShip + tariff + serviceFee + inspectionFee;
+    const finalPrice    = Math.ceil(subtotal * 1.05 * 1.01);
+    Object.assign(record, {
+      product: document.getElementById('partner-product-name-input').value.trim(),
+      customer: document.getElementById('partner-customer').value.trim(),
+      notes: document.getElementById('partner-notes').value.trim(),
+      partnerName: p.name, shippingType: shipType,
+      weight, cost, intlShip, tariff, serviceFee, inspectionFee,
+      finalPrice
+    });
+  } else if (type === 'forward') {
+    const weight = parseFloat(document.getElementById('forward-weight').value) || 0;
+    const count  = parseInt(document.getElementById('forward-count').value) || 1;
+    const origin = document.getElementById('forward-origin').value;
+    const fwd    = settings.forwarding[origin] || { rate:120, min:60 };
+    const fee    = Math.max(fwd.min * count, Math.round(weight * count * fwd.rate));
+    Object.assign(record, {
+      customer: document.getElementById('forward-customer').value.trim(),
+      returnDate: document.getElementById('forward-return-date').value,
+      description: document.getElementById('forward-desc').value.trim(),
+      notes: document.getElementById('forward-notes').value.trim(),
+      shippingType: origin, weight, count, finalPrice: fee
+    });
+  }
+
+  records.unshift(record);
+  saveRecordsToStorage();
+
+  // Try cloud sync
+  syncToGAS(record);
+
+  // Feedback
+  showToast('✅ 已儲存記錄');
+}
+
+// ============================================================
+// 主控者模式
+// ============================================================
+function unlockMaster() {
+  const pw  = document.getElementById('master-pw-input').value;
+  if (!pw) return;
+  const url = settings.gas_url;
+  if (!url) { showToast('⚠️ 請先設定 GAS 網址'); return; }
+
+  const btn = document.querySelector('#master-locked .btn');
+  btn.textContent = '驗證中…';
+  btn.disabled = true;
+
+  fetch(url + '?action=verifyPassword&pw=' + encodeURIComponent(pw) + '&t=' + Date.now())
+    .then(res => res.json())
+    .then(data => {
+      if (data.verified) {
+        masterMode = true;
+        document.getElementById('master-locked').style.display = 'none';
+        document.getElementById('master-unlocked').style.display = 'block';
+        document.getElementById('master-pw-input').value = '';
+      } else {
+        showToast('❌ 密碼錯誤');
+      }
+    })
+    .catch(() => showToast('❌ 驗證失敗，請確認 GAS 網址'))
+    .finally(() => {
+      btn.textContent = '解鎖';
+      btn.disabled = false;
+    });
+}
+
+function lockMaster() {
+  masterMode = false;
+  document.getElementById('master-locked').style.display = 'flex';
+  document.getElementById('master-unlocked').style.display = 'none';
+}
+
+function pushSettingsToCloud() {
+  const url = settings.gas_url;
+  if (!url) { showToast('⚠️ 請先設定 GAS 網址'); return; }
+  const syncSettings = {
+    rates: settings.rates,
+    live_rates: settings.live_rates,
+    shipping: settings.shipping,
+    tariff: settings.tariff,
+    fees: settings.fees,
+    partners: settings.partners,
+    partner_shipping: settings.partner_shipping,
+    forwarding: settings.forwarding,
+    _pushedAt: new Date().toISOString()
+  };
+  const encoded = encodeURIComponent(JSON.stringify(syncSettings));
+  const img = new Image();
+  img.onload = img.onerror = () => showToast('✅ 設定已推送，同事下次開 APP 自動套用');
+  img.src = url + '?action=saveSettings&data=' + encoded;
+}
+
+function syncSettingsFromCloud() {
+  const url = settings.gas_url;
+  if (!url) return;
+  fetch(url + '?action=getSettings&t=' + Date.now())
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success || !data.settings) return;
+      const cloud = JSON.parse(data.settings);
+      if (!cloud || !cloud.rates) return;
+      // 保留個人設定，其餘套用雲端
+      const personal = { gas_url: settings.gas_url, sheet_url: settings.sheet_url, saved_by: settings.saved_by };
+      settings = deepMerge(settings, cloud);
+      settings.gas_url  = personal.gas_url;
+      settings.sheet_url = personal.sheet_url;
+      settings.saved_by  = personal.saved_by;
+      saveSettingsToStorage();
+      fillSettingsUI();
+      updateRateChips();
+      renderPartnerCards();
+      renderPartnerSettings();
+    })
+    .catch(() => {}); // 靜默失敗，不影響使用
+}
+
+function syncToGAS(record) {
+  const url = settings.gas_url;
+  if (!url) return;
+  // 用 Image 方式發送，完全繞過 CORS／重新導向問題
+  const encoded = encodeURIComponent(JSON.stringify(record));
+  const img = new Image();
+  img.onload = img.onerror = function() {
+    showToast('☁️ 已同步至雲端');
+  };
+  img.src = url + '?data=' + encoded;
+}
+
+function loadFromGAS() {
+  const url = settings.gas_url;
+  if (!url) { showToast('⚠️ 請先在設定中填入雲端網址'); return; }
+  const btn = document.getElementById('cloud-sync-btn');
+  if (btn) { btn.textContent = '同步中…'; btn.disabled = true; }
+
+  fetch(url + '?t=' + Date.now())
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.error || '同步失敗');
+      const remote = (data.records || []).filter(r => r.id && r.type);
+      let added = 0, updated = 0;
+      remote.forEach(r => {
+        const idx = records.findIndex(x => x.id === r.id);
+        if (idx === -1) { records.push(r); added++; }
+        else { records[idx] = r; updated++; }
+      });
+      records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      saveRecordsToStorage();
+      renderRecords();
+      const msg = added > 0 || updated > 0
+        ? `☁️ 同步完成，新增 ${added} 筆、更新 ${updated} 筆`
+        : '☁️ 已是最新，無變更';
+      showToast(msg);
+    })
+    .catch(err => showToast('❌ 同步失敗：' + err.message))
+    .finally(() => {
+      if (btn) { btn.textContent = '☁️ 從雲端同步所有人的記錄'; btn.disabled = false; }
+    });
+}
+
+function testGASConnection() {
+  const url = document.getElementById('s-gas-url').value.trim();
+  if (!url) { alert('請先填入 GAS 網址'); return; }
+  const btn = document.getElementById('gas-test-btn');
+  btn.textContent = '測試中…';
+  btn.disabled = true;
+  const testRecord = {
+    id: 'test_' + Date.now(),
+    type: 'regular',
+    timestamp: new Date().toISOString(),
+    product: '【連線測試 — 可刪除】',
+    customer: '', notes: '測試列'
+  };
+  const encoded = encodeURIComponent(JSON.stringify(testRecord));
+  const img = new Image();
+  img.onload = img.onerror = function() {
+    btn.textContent = '🔗 測試連線';
+    btn.disabled = false;
+    alert('✅ 請求已送出！\n\n請開啟試算表，確認是否出現「連線測試」那列。\n若有出現 → 同步正常\n若沒有 → GAS 請重新部署（選新版本）');
+  };
+  img.src = url + '?data=' + encoded;
+}
+
+function openSheet() {
+  const url = settings.sheet_url || document.getElementById('s-sheet-url').value;
+  if (url) window.open(url, '_blank');
+  else alert('請先在設定中填入試算表連結');
+}
+
+// ============================================================
+// RECORDS RENDER
+// ============================================================
+function renderRecords() {
+  const list   = document.getElementById('records-list');
+  const search = (document.getElementById('records-search').value || '').toLowerCase();
+  const filter = document.getElementById('records-filter').value;
+
+  const filtered = records.filter(r => {
+    if (filter && r.type !== filter) return false;
+    if (search) {
+      const haystack = [r.customer, r.product, r.description, r.partnerName, r.notes].join(' ').toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>${records.length === 0 ? '尚無任何記錄' : '找不到符合的記錄'}</p></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(r => {
+    const date = new Date(r.timestamp).toLocaleString('zh-TW', {
+      month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'
+    });
+    const title = r.product || r.description || (r.partnerName ? r.partnerName + '合作' : TYPE_LABELS[r.type]);
+    const price = r.finalPrice ? 'NT$ ' + r.finalPrice.toLocaleString() : '—';
+    const customer = r.customer ? `👤 ${r.customer}` : '';
+    return `<div class="record-item" onclick="showDetail('${r.id}')">
+      <div class="record-header">
+        <div class="record-title">${title || '（未命名）'}</div>
+        <div class="record-price">${price}</div>
+      </div>
+      <div class="record-meta">
+        <span class="record-type-badge type-${r.type}">${TYPE_LABELS[r.type]}</span>
+        ${customer ? `<span class="record-customer">${customer}</span>` : ''}
+        ${r.savedBy ? `<span class="record-customer">✍️ ${r.savedBy}</span>` : ''}
+        <span class="record-date">${date}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showDetail(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  const date = new Date(r.timestamp).toLocaleString('zh-TW');
+  let html = `<div class="record-type-badge type-${r.type}" style="margin-bottom:10px;">${TYPE_LABELS[r.type]}</div>
+  <div class="detail-section">
+    <h4>基本資訊</h4>`;
+
+  if (r.customer) html += row('客人', r.customer);
+  if (r.product)  html += row('商品', r.product);
+  html += row('時間', date);
+  if (r.savedBy) html += row('記錄者', r.savedBy);
+
+  if (r.type === 'regular') {
+    const friendPriceR = (r.friendPrice != null)
+      ? r.friendPrice
+      : Math.round(r.finalPrice * (1 - ((settings.fees.business_tax||5)/100) - ((settings.fees.payment_fee||1.5)/100)));
+    const origLabel = r.originalPrice != null ? (CURRENCY_LABELS[r.currency] || r.currency) + ' ' + r.originalPrice.toLocaleString() : '—';
+    html += `</div><div class="detail-section"><h4>費用明細</h4>
+      ${r.url ? row('商品網址', `<a href="${r.url}" target="_blank" style="color:var(--primary);word-break:break-all;">${r.url}</a>`) : ''}
+      ${row('幣別', CURRENCY_LABELS[r.currency] + ' (匯率 ' + r.rate + ')')}
+      ${row('商品原幣價格', origLabel)}
+      ${row('商品原價（台幣）', 'NT$ ' + r.productTWD?.toLocaleString())}
+      ${row('當地運費（台幣）', 'NT$ ' + r.localShipTWD?.toLocaleString())}
+      ${row('貨運類別', SHIP_LABELS[r.shippingType])}
+      ${row('預估重量', r.weight + ' KG')}
+      ${row('國際運費（台幣）', 'NT$ ' + r.intlShipTWD?.toLocaleString())}
+      ${row('國際關稅', 'NT$ ' + r.tariff?.toLocaleString())}
+      ${row('成本合計', 'NT$ ' + r.totalCost?.toLocaleString())}
+      ${row('定價', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}
+      ${row('親友價（免營業稅＆金流手續費）', '<strong style="color:var(--accent)">NT$ ' + friendPriceR.toLocaleString()+'</strong>')}
+      ${row('淨利', 'NT$ ' + r.netProfit?.toLocaleString() + ' (' + r.marginPct + '%)')}`;
+  } else if (r.type === 'live') {
+    const friendPriceL = (r.friendPrice != null)
+      ? r.friendPrice
+      : Math.round(r.finalPrice * (1 - ((settings.fees.business_tax||5)/100) - ((settings.fees.payment_fee||1.5)/100)));
+    const origLabel = r.originalPrice != null ? (CURRENCY_LABELS[r.currency] || r.currency) + ' ' + r.originalPrice.toLocaleString() : '—';
+    html += `</div><div class="detail-section"><h4>費用明細</h4>
+      ${row('幣別', CURRENCY_LABELS[r.currency] + ' (匯率 ' + r.rate + ')')}
+      ${row('商品原幣價格', origLabel)}
+      ${row('商品原價（台幣）', 'NT$ ' + r.productTWD?.toLocaleString())}
+      ${r.localShipTWD ? row('當地運費（台幣）', 'NT$ ' + r.localShipTWD?.toLocaleString()) : ''}
+      ${row('成本合計', 'NT$ ' + r.totalCost?.toLocaleString())}
+      ${row('定價', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}
+      ${row('親友價（免營業稅＆金流手續費）', '<strong style="color:var(--accent)">NT$ ' + friendPriceL.toLocaleString()+'</strong>')}
+      ${row('淨利', 'NT$ ' + r.netProfit?.toLocaleString() + ' (' + r.marginPct + '%)')}`;
+  } else if (r.type === 'partner') {
+    html += `</div><div class="detail-section"><h4>開團明細</h4>
+      ${row('合作對象', r.partnerName)}
+      ${row('零售定價', 'NT$ ' + r.retailPrice?.toLocaleString())}
+      ${row('合作開團價', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}`;
+  } else if (r.type === 'forward') {
+    html += `</div><div class="detail-section"><h4>代運明細</h4>
+      ${r.returnDate ? row('實際運回日期', r.returnDate) : ''}
+      ${r.description ? row('說明', r.description) : ''}
+      ${row('來源', SHIP_LABELS[r.shippingType])}
+      ${row('重量', r.weight + ' KG × ' + r.count + ' 件')}
+      ${row('代運費', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}`;
+  }
+
+  if (r.notes) html += row('備註', r.notes);
+  html += '</div>';
+
+  document.getElementById('detail-modal-content').innerHTML = html;
+  document.getElementById('detail-delete-btn').onclick = () => {
+    if (!confirm('確定刪除此記錄？')) return;
+    records = records.filter(x => x.id !== id);
+    saveRecordsToStorage();
+    closeModal('detail-modal');
+    renderRecords();
+  };
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function row(label, value) {
+  return `<div class="breakdown-row"><span class="breakdown-label">${label}</span><span class="breakdown-value">${value}</span></div>`;
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// ============================================================
+// EXPORT
+// ============================================================
+function exportData() {
+  const data = { records, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'rooc-records-' + new Date().toLocaleDateString('zh-TW').replace(/\//g,'-') + '.json';
+  a.click();
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1F2937;color:#fff;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:600;z-index:200;pointer-events:none;transition:opacity .3s;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+}
+
+// ============================================================
+// CLOSE MODAL ON OVERLAY CLICK
+// ============================================================
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+
+// ============================================================
+// START
+// ============================================================
+init();
+</script>
+</body>
+</html>
