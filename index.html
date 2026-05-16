@@ -629,15 +629,9 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
             <option value="japan">🇯🇵 日本</option>
           </select>
         </div>
-        <div class="form-row-2">
-          <div class="form-row" style="margin-bottom:0">
-            <label class="form-label">實際重量（KG）</label>
-            <input type="number" class="form-input" id="forward-weight" placeholder="0.0" step="0.05" inputmode="decimal" oninput="calcForward()">
-          </div>
-          <div class="form-row" style="margin-bottom:0">
-            <label class="form-label">包裹數量</label>
-            <input type="number" class="form-input" id="forward-count" placeholder="1" min="1" inputmode="numeric" oninput="calcForward()">
-          </div>
+        <div class="form-row">
+          <label class="form-label">實際重量（KG）</label>
+          <input type="number" class="form-input" id="forward-weight" placeholder="0.0" step="0.05" inputmode="decimal" oninput="calcForward()">
         </div>
       </div>
 
@@ -1604,7 +1598,6 @@ function calcPartner() {
 
 function calcForward() {
   const weight = parseFloat(document.getElementById('forward-weight').value) || 0;
-  const count  = parseInt(document.getElementById('forward-count').value) || 1;
   const origin = document.getElementById('forward-origin').value;
 
   if (weight <= 0) {
@@ -1616,9 +1609,8 @@ function calcForward() {
   document.getElementById('forward-empty').style.display = 'none';
 
   const fwd = settings.forwarding[origin] || { rate:260 };
-  const totalWeight = weight * count;
-  // 基礎運費（含進口稅）：取「重量 × 費率」與「最低收費 × 件數」較大者
-  const baseFee = Math.max((fwd.min || 0) * count, totalWeight * fwd.rate);
+  // 基礎運費（含進口稅）：取「重量 × 費率」與「最低收費」較大者
+  const baseFee = Math.max((fwd.min || 0), weight * fwd.rate);
 
   // 加上 5% 營業稅與 1.5% 金流手續費（gross-up，扣完稅後實收 = baseFee）
   const btRate = (settings.fees.business_tax || 5)  / 100;
@@ -1627,7 +1619,7 @@ function calcForward() {
 
   document.getElementById('forward-result-price').textContent = 'NT$ ' + fee.toLocaleString();
   document.getElementById('forward-calc-detail').textContent =
-    `${count} 件 × ${weight}KG × NT$${fwd.rate}/KG（含進口稅）= NT$${Math.round(baseFee).toLocaleString()}，加 ${(btRate*100).toFixed(1)}% 營業稅 + ${(pfRate*100).toFixed(1)}% 金流費 → NT$${fee.toLocaleString()}`;
+    `${weight}KG × NT$${fwd.rate}/KG（含進口稅）= NT$${Math.round(baseFee).toLocaleString()}，加 ${(btRate*100).toFixed(1)}% 營業稅 + ${(pfRate*100).toFixed(1)}% 金流費 → NT$${fee.toLocaleString()}`;
 }
 
 function marginBadge(pct, tierLabel) {
@@ -1800,13 +1792,12 @@ function saveRecord(type) {
     });
   } else if (type === 'forward') {
     const weight = parseFloat(document.getElementById('forward-weight').value) || 0;
-    const count  = parseInt(document.getElementById('forward-count').value) || 1;
     const origin = document.getElementById('forward-origin').value;
     const fwd    = settings.forwarding[origin] || { rate:120, min:60 };
     const btRate = (settings.fees.business_tax || 5)  / 100;
     const pfRate = (settings.fees.payment_fee  || 1.5)/ 100;
     // 基礎運費（含進口稅，不含營業稅與金流手續費）
-    const baseFee = Math.max((fwd.min || 0) * count, weight * count * fwd.rate);
+    const baseFee = Math.max((fwd.min || 0), weight * fwd.rate);
     // gross-up：實收 = baseFee
     const fee    = Math.ceil(baseFee / (1 - btRate - pfRate));
     const bizTax = Math.round(fee * btRate);
@@ -1816,7 +1807,7 @@ function saveRecord(type) {
       returnDate: document.getElementById('forward-return-date').value,
       description: document.getElementById('forward-desc').value.trim(),
       notes: document.getElementById('forward-notes').value.trim(),
-      shippingType: origin, weight, count,
+      shippingType: origin, weight,
       baseFee: Math.round(baseFee), bizTax, payFee, finalPrice: fee
     });
   }
@@ -2091,7 +2082,7 @@ function showDetail(id) {
       ${r.returnDate ? row('實際運回日期', r.returnDate) : ''}
       ${r.description ? row('說明', r.description) : ''}
       ${row('來源', SHIP_LABELS[r.shippingType])}
-      ${row('重量', r.weight + ' KG × ' + r.count + ' 件')}
+      ${row('重量', r.weight + ' KG' + (r.count && r.count > 1 ? ' × ' + r.count + ' 件' : ''))}
       ${r.baseFee != null ? row('基礎運費（含進口稅）', 'NT$ ' + r.baseFee.toLocaleString()) : ''}
       ${r.bizTax != null ? row('營業稅 5%', 'NT$ ' + r.bizTax.toLocaleString()) : ''}
       ${r.payFee != null ? row('金流手續費 1.5%', 'NT$ ' + r.payFee.toLocaleString()) : ''}
