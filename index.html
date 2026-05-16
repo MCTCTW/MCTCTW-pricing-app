@@ -1617,11 +1617,17 @@ function calcForward() {
 
   const fwd = settings.forwarding[origin] || { rate:260 };
   const totalWeight = weight * count;
-  const fee = Math.round(totalWeight * fwd.rate);
+  // 基礎運費（含進口稅）：取「重量 × 費率」與「最低收費 × 件數」較大者
+  const baseFee = Math.max((fwd.min || 0) * count, totalWeight * fwd.rate);
+
+  // 加上 5% 營業稅與 1.5% 金流手續費（gross-up，扣完稅後實收 = baseFee）
+  const btRate = (settings.fees.business_tax || 5)  / 100;
+  const pfRate = (settings.fees.payment_fee  || 1.5)/ 100;
+  const fee    = Math.ceil(baseFee / (1 - btRate - pfRate));
 
   document.getElementById('forward-result-price').textContent = 'NT$ ' + fee.toLocaleString();
   document.getElementById('forward-calc-detail').textContent =
-    `${count} 件 × ${weight}KG = ${totalWeight.toFixed(2)}KG × NT$${fwd.rate}/KG（包稅）`;
+    `${count} 件 × ${weight}KG × NT$${fwd.rate}/KG（含進口稅）= NT$${Math.round(baseFee).toLocaleString()}，加 ${(btRate*100).toFixed(1)}% 營業稅 + ${(pfRate*100).toFixed(1)}% 金流費 → NT$${fee.toLocaleString()}`;
 }
 
 function marginBadge(pct, tierLabel) {
@@ -1797,13 +1803,21 @@ function saveRecord(type) {
     const count  = parseInt(document.getElementById('forward-count').value) || 1;
     const origin = document.getElementById('forward-origin').value;
     const fwd    = settings.forwarding[origin] || { rate:120, min:60 };
-    const fee    = Math.max(fwd.min * count, Math.round(weight * count * fwd.rate));
+    const btRate = (settings.fees.business_tax || 5)  / 100;
+    const pfRate = (settings.fees.payment_fee  || 1.5)/ 100;
+    // 基礎運費（含進口稅，不含營業稅與金流手續費）
+    const baseFee = Math.max((fwd.min || 0) * count, weight * count * fwd.rate);
+    // gross-up：實收 = baseFee
+    const fee    = Math.ceil(baseFee / (1 - btRate - pfRate));
+    const bizTax = Math.round(fee * btRate);
+    const payFee = Math.round(fee * pfRate);
     Object.assign(record, {
       customer: document.getElementById('forward-customer').value.trim(),
       returnDate: document.getElementById('forward-return-date').value,
       description: document.getElementById('forward-desc').value.trim(),
       notes: document.getElementById('forward-notes').value.trim(),
-      shippingType: origin, weight, count, finalPrice: fee
+      shippingType: origin, weight, count,
+      baseFee: Math.round(baseFee), bizTax, payFee, finalPrice: fee
     });
   }
 
@@ -2034,11 +2048,15 @@ function showDetail(id) {
       ? r.friendPrice
       : Math.round(r.finalPrice * (1 - ((settings.fees.business_tax||5)/100) - ((settings.fees.payment_fee||1.5)/100)));
     const origLabel = r.originalPrice != null ? (CURRENCY_LABELS[r.currency] || r.currency) + ' ' + r.originalPrice.toLocaleString() : '—';
+    const localShipOrigLabel = r.localShipOriginal != null
+      ? (CURRENCY_LABELS[r.currency] || r.currency) + ' ' + r.localShipOriginal.toLocaleString()
+      : '—';
     html += `</div><div class="detail-section"><h4>費用明細</h4>
       ${r.url ? row('商品網址', `<a href="${r.url}" target="_blank" style="color:var(--primary);word-break:break-all;">${r.url}</a>`) : ''}
       ${row('幣別', CURRENCY_LABELS[r.currency] + ' (匯率 ' + r.rate + ')')}
       ${row('商品原幣價格', origLabel)}
       ${row('商品原價（台幣）', 'NT$ ' + r.productTWD?.toLocaleString())}
+      ${row('當地運費（原幣）', localShipOrigLabel)}
       ${row('當地運費（台幣）', 'NT$ ' + r.localShipTWD?.toLocaleString())}
       ${row('貨運類別', SHIP_LABELS[r.shippingType])}
       ${row('預估重量', r.weight + ' KG')}
@@ -2057,6 +2075,7 @@ function showDetail(id) {
       ${row('幣別', CURRENCY_LABELS[r.currency] + ' (匯率 ' + r.rate + ')')}
       ${row('商品原幣價格', origLabel)}
       ${row('商品原價（台幣）', 'NT$ ' + r.productTWD?.toLocaleString())}
+      ${r.localShipOriginal ? row('當地運費（原幣）', (CURRENCY_LABELS[r.currency] || r.currency) + ' ' + r.localShipOriginal.toLocaleString()) : ''}
       ${r.localShipTWD ? row('當地運費（台幣）', 'NT$ ' + r.localShipTWD?.toLocaleString()) : ''}
       ${row('成本合計', 'NT$ ' + r.totalCost?.toLocaleString())}
       ${row('定價', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}
@@ -2073,7 +2092,10 @@ function showDetail(id) {
       ${r.description ? row('說明', r.description) : ''}
       ${row('來源', SHIP_LABELS[r.shippingType])}
       ${row('重量', r.weight + ' KG × ' + r.count + ' 件')}
-      ${row('代運費', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}`;
+      ${r.baseFee != null ? row('基礎運費（含進口稅）', 'NT$ ' + r.baseFee.toLocaleString()) : ''}
+      ${r.bizTax != null ? row('營業稅 5%', 'NT$ ' + r.bizTax.toLocaleString()) : ''}
+      ${r.payFee != null ? row('金流手續費 1.5%', 'NT$ ' + r.payFee.toLocaleString()) : ''}
+      ${row('代運費（客人實付）', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}`;
   }
 
   if (r.notes) html += row('備註', r.notes);
