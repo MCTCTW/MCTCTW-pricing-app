@@ -27,7 +27,7 @@ function doGet(e) {
     if (e && e.parameter && e.parameter.data) {
       var record = JSON.parse(e.parameter.data);
       var sheet = getOrCreateSheet();
-      if (sheet.getLastRow() === 0) writeHeaders(sheet);
+      ensureHeaders(sheet);
       sheet.appendRow(buildRow(record));
       return jsonResponse({ success: true });
     }
@@ -77,25 +77,43 @@ function getOrCreateSheet() {
   return sheet;
 }
 
+// 預期欄位（已有舊資料則自動於右側追加缺少的欄位，不會動到舊欄位順序）
+var EXPECTED_HEADERS = [
+  'ID', '記錄時間', '類型', '商品名稱', '客人', '幣別', '匯率',
+  '商品原價(原幣)', '商品原價(台幣)', '當地運費(台幣)',
+  '貨運類別', '預估重量KG', '國際運費(台幣)', '國際關稅',
+  '成本合計', '定價(台幣)', '淨利', '淨利率%',
+  '合作對象', '零售定價', '代運費', '說明', '備註', '記錄者',
+  '商品網址', '原幣售價', '親友價', 'raw_json',
+  '當地運費(原幣)' // 2026-05-06 新增
+];
+
 function writeHeaders(sheet) {
-  var headers = [
-    'ID', '記錄時間', '類型', '商品名稱', '客人', '幣別', '匯率',
-    '商品原價(原幣)', '商品原價(台幣)', '當地運費(台幣)',
-    '貨運類別', '預估重量KG', '國際運費(台幣)', '國際關稅',
-    '成本合計', '定價(台幣)', '淨利', '淨利率%',
-    '合作對象', '零售定價', '代運費', '說明', '備註', '記錄者',
-    '商品網址', '原幣售價', '親友價', 'raw_json'
-  ];
-  sheet.appendRow(headers);
-  sheet.getRange(1, 1, 1, headers.length)
+  sheet.appendRow(EXPECTED_HEADERS);
+  sheet.getRange(1, 1, 1, EXPECTED_HEADERS.length)
     .setBackground('#7C3AED')
     .setFontColor('#FFFFFF')
     .setFontWeight('bold');
 
   // 固定欄寬
-  var widths = [130,155,85,200,100,65,65,130,130,130,100,115,130,90,90,90,65,75,100,90,80,200,200,80,250,100,100,50];
+  var widths = [130,155,85,200,100,65,65,130,130,130,100,115,130,90,90,90,65,75,100,90,80,200,200,80,250,100,100,50,130];
   for (var i = 0; i < widths.length; i++) {
     sheet.setColumnWidth(i + 1, widths[i]);
+  }
+}
+
+// 確保標題列包含所有預期欄位（缺的補在右邊）
+function ensureHeaders(sheet) {
+  if (sheet.getLastRow() === 0) { writeHeaders(sheet); return; }
+  var lastCol = sheet.getLastColumn();
+  var current = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var i = current.length; i < EXPECTED_HEADERS.length; i++) {
+    sheet.getRange(1, i + 1)
+      .setValue(EXPECTED_HEADERS[i])
+      .setBackground('#7C3AED')
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold');
+    sheet.setColumnWidth(i + 1, 130);
   }
 }
 
@@ -122,6 +140,7 @@ function rowToRecord(row) {
     originalPrice: n(row[7], base.originalPrice),
     productTWD:    n(row[8], base.productTWD),
     localShipTWD:  n(row[9], base.localShipTWD),
+    localShipOriginal: n(row[28], base.localShipOriginal), // 新欄位，舊資料 fallback 到 raw_json
     shippingType:  shipRevMap[row[10]] || base.shippingType || '',
     weight:        n(row[11], base.weight),
     intlShipTWD:   n(row[12], base.intlShipTWD),
@@ -183,7 +202,8 @@ function buildRow(r) {
     r.url || '',
     foreignPrice,
     friendPrice,
-    JSON.stringify(r)
+    JSON.stringify(r),
+    r.localShipOriginal || ''  // 當地運費(原幣)
   ];
 }
 
