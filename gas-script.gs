@@ -229,6 +229,37 @@ function runMigration() {
   return msg;
 }
 
+// 一次性修正：直接把「當地運費(原幣)」寫到 AC1（欄 29）
+function fixHeaderManual() {
+  var sheet = getOrCreateSheet();
+  sheet.getRange(1, 29)
+    .setValue('當地運費(原幣)')
+    .setBackground('#7C3AED')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold');
+  sheet.setColumnWidth(29, 130);
+  Logger.log('✅ 已將「當地運費(原幣)」寫入 AC1（欄 29）');
+}
+
+// 診斷：列出試算表所有工作表和標題列
+function debugSheets() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  Logger.log('📊 試算表 ID: ' + SPREADSHEET_ID);
+  Logger.log('📊 試算表名稱: ' + ss.getName());
+  Logger.log('📊 工作表清單:');
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    var s = sheets[i];
+    var lastCol = s.getLastColumn();
+    var lastRow = s.getLastRow();
+    Logger.log('  ' + (i+1) + '. 「' + s.getName() + '」 — ' + lastCol + ' 欄 × ' + lastRow + ' 列');
+    if (lastCol > 0 && lastRow > 0) {
+      var headers = s.getRange(1, 1, 1, lastCol).getValues()[0];
+      Logger.log('     標題: ' + JSON.stringify(headers));
+    }
+  }
+}
+
 function jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
