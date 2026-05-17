@@ -212,6 +212,23 @@ function setMasterPassword() {
   Logger.log('✅ 主控者密碼已設定完成');
 }
 
+// 一鍵補齊試算表標題列（新增「當地運費(原幣)」等缺少的欄位）
+// 用法：Apps Script 編輯器選此函數 → 點「執行」
+function runMigration() {
+  var sheet = getOrCreateSheet();
+  var beforeCols = sheet.getLastColumn();
+  ensureHeaders(sheet);
+  var afterCols = sheet.getLastColumn();
+  var msg = '✅ 標題列檢查完成：' + beforeCols + ' 欄 → ' + afterCols + ' 欄';
+  if (afterCols > beforeCols) {
+    msg += '（已新增 ' + (afterCols - beforeCols) + ' 個欄位）';
+  } else {
+    msg += '（無需新增）';
+  }
+  Logger.log(msg);
+  return msg;
+}
+
 function jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
