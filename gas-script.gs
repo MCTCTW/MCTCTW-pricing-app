@@ -23,6 +23,12 @@ function doGet(e) {
       return jsonResponse({ success: true, settings: val || '' });
     }
 
+    // 精簡商品索引（給重量核算/記帳做品名自動補全用）
+    // 伺服器端先去重＋只回必要欄位 → 傳輸量約為完整 records 的 1/10，手機弱網也抓得動
+    if (action === 'productIndex') {
+      return jsonResponse({ success: true, v: 1, items: buildProductIndex() });
+    }
+
     // 寫入報價記錄
     if (e && e.parameter && e.parameter.data) {
       var record = JSON.parse(e.parameter.data);
@@ -264,4 +270,54 @@ function jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/**
+ * 精簡商品索引：每個品名只留最新一筆，欄位用陣列（省掉重複的欄位名）。
+ * 每筆 = [品名, 客人, 幣別, 原幣價, 貨運類別, 預估重KG, 國際運費TWD, 定價TWD, 類型]
+ * 若最新那筆沒有重量（例如連線/合作定價），會沿用「最近一筆有重量的一般定價」的重量與運費，
+ * 讓重量核算的預估重不會因為後來開了連線團就消失。
+ */
+function buildProductIndex() {
+  var sheet = getOrCreateSheet();
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+
+  var typeRevMap = { '一般定價':'regular', '連線定價':'live', '合作開團':'partner', '代運計價':'forward' };
+  var curRevMap  = { '韓幣':'KRW', '日幣':'JPY', '人民幣':'CNY', '港幣':'HKD', '台幣':'TWD' };
+  var shipRevMap = { '韓國':'korea', '中國普貨':'china_normal', '中國特貨':'china_special', '日本':'japan', '香港':'hk' };
+  var num = function(v) { return (v !== '' && v != null) ? (+v || 0) : 0; };
+
+  var latest = {}, withWeight = {}, order = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0] || !row[3]) continue;                 // 沒 ID 或沒品名的列跳過
+    var product = String(row[3]).trim();
+    if (!product) continue;
+    var key = product.toLowerCase();
+    if (!latest.hasOwnProperty(key)) order.push(key);
+
+    var type = typeRevMap[row[2]] || '';
+    var rec = [
+      product,
+      row[4] ? String(row[4]) : '',                   // 客人
+      curRevMap[row[5]] || '',                        // 幣別
+      num(row[7]),                                    // 原幣價
+      shipRevMap[row[10]] || '',                      // 貨運類別
+      num(row[11]),                                   // 預估重量KG
+      num(row[12]),                                   // 國際運費TWD
+      num(row[15]),                                   // 定價TWD
+      type
+    ];
+    latest[key] = rec;                                // 由上而下掃，越後面越新
+    if (type === 'regular' && num(row[11]) > 0) withWeight[key] = rec;
+  }
+
+  var out = [];
+  for (var j = 0; j < order.length; j++) {
+    var k = order[j], r = latest[k], w = withWeight[k];
+    if (w && !(r[5] > 0)) { r[4] = w[4]; r[5] = w[5]; r[6] = w[6]; }   // 借用最近一筆有重量的資料
+    out.push(r);
+  }
+  return out;
 }
