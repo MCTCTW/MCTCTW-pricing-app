@@ -49,17 +49,17 @@ function doGet(e) {
     // 🚨 有人在試算表中間插一欄，所有欄位就整片右移；舊版照讀不誤 → 1,400 筆錯位資料會被寫死進每個人的本機。
     //    但標題名稱本來就被自訂過（這張表的標題跟程式碼裡的預設不一樣），所以不能比字，要比「對位」：
     //    用 raw_json 裡的 id 跟 A 欄的 ID 對，對不起來才是真的位移。
-    var shift = schemaShift_(data);
-    if (shift) {
-      return jsonResponse({ success: false, error: 'SHEET_SCHEMA_CHANGED', bad: [shift], version: VER });
-    }
+    // raw_json 不一定在第 28 欄（這張表的標題被自訂過）→ 用名稱找，找不到就退回只讀可視欄位。
+    // 🚨 不可以因為對不上就整個擋掉讀取：可視欄位一直是對的，擋掉等於全公司同步停擺。
+    var rawIdx = findRawIdx_(data);
+    var shiftNote = schemaShift_(data, rawIdx);
     var records = [];
     var bad = 0;
     for (var i = 1; i < data.length; i++) {
       if (!data[i][0]) continue;
-      try { records.push(rowToRecord(data[i])); } catch(e2) { bad++; }
+      try { records.push(rowToRecord(data[i], rawIdx)); } catch(e2) { bad++; }
     }
-    return jsonResponse({ success: true, records: records, dels: readDels_(), bad: bad, version: VER });
+    return jsonResponse({ success: true, records: records, dels: readDels_(), bad: bad, note: shiftNote, rawIdx: rawIdx, version: VER });
   } catch(err) {
     return jsonResponse({ success: false, error: err.message });
   }
@@ -180,14 +180,37 @@ function saveSettings_(raw) {
   } finally { lock.releaseLock(); }
 }
 
+// 找出 raw_json 真正在第幾欄：先用標題名稱找，找不到就掃資料列——
+// 哪一欄的內容解得開 JSON 而且它的 id 跟 A 欄一致，那一欄就是（標題被改成別的名字也找得到）。
+function findRawIdx_(data) {
+  var head = data[0] || [];
+  for (var h = 0; h < head.length; h++) {
+    if (String(head[h] || '').trim().toLowerCase() === 'raw_json') return h;
+  }
+  for (var i = 1; i < data.length && i < 12; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    for (var c = row.length - 1; c >= 0; c--) {
+      var v = row[c];
+      if (typeof v !== 'string' || v.charAt(0) !== '{') continue;
+      try {
+        var o = JSON.parse(v);
+        if (o && o.id && String(o.id) === String(row[0])) return c;
+      } catch (e) {}
+    }
+  }
+  return -1;
+}
+
 // 欄位有沒有整片位移：抽樣幾列，raw_json（第 28 欄）解得開、而且它的 id 跟 A 欄一致 → 沒位移。
 // 只比標題文字是不行的：這張表的標題早就被自訂過，比字會誤判成位移而擋掉所有同步。
-function schemaShift_(data) {
+function schemaShift_(data, rawIdx) {
+  if (rawIdx == null || rawIdx < 0) return 'RAW_JSON_NOT_FOUND：找不到 raw_json 欄，這次只用可視欄位還原（代運/合作開團的專屬欄位讀不回來）';
   var checked = 0, bad = 0;
   for (var i = 1; i < data.length && checked < 8; i++) {
     var row = data[i];
     if (!row[0]) continue;
-    var raw = row[27];
+    var raw = row[rawIdx];
     if (!raw) continue;
     checked++;
     var b = null;
@@ -195,7 +218,7 @@ function schemaShift_(data) {
     if (b && b.id && String(b.id) !== String(row[0])) bad++;
   }
   if (checked >= 3 && bad >= Math.ceil(checked / 2)) {
-    return '欄位疑似整片位移：抽驗 ' + checked + ' 列有 ' + bad + ' 列的 raw_json 對不上 ID 欄，可能有人在中間插了欄位';
+    return 'SCHEMA_SHIFT_SUSPECT：抽驗 ' + checked + ' 列有 ' + bad + ' 列的 raw_json 對不上 ID 欄（可能有人插了欄位）；仍照可視欄位讀取';
   }
   return '';
 }
@@ -278,13 +301,14 @@ function ensureHeaders(sheet) {
 // 🚨 一定要「先把 raw_json 整包展開當底」再用可視欄位覆蓋：代運計價的實際運回日期／基礎運費／營業稅／
 //    金流手續費、合作開團的成本／服務費／驗貨費／國際運費、親友價這些欄位在表上沒有欄，
 //    以前直接回傳新物件 → 同步一次就把本機那些欄位清成 undefined 並寫死。
-function rowToRecord(row) {
+function rowToRecord(row, rawIdx) {
   var typeRevMap = { '一般定價':'regular', '連線定價':'live', '合作開團':'partner', '代運計價':'forward' };
   var curRevMap  = { '韓幣':'KRW', '日幣':'JPY', '人民幣':'CNY', '港幣':'HKD', '台幣':'TWD' };
   var shipRevMap = { '韓國':'korea', '中國普貨':'china_normal', '中國特貨':'china_special', '日本':'japan', '香港':'hk' };
 
   var base = {};
-  if (row[27]) { try { base = JSON.parse(row[27]); } catch(e) {} }
+  var ri = (rawIdx == null || rawIdx < 0) ? 27 : rawIdx;
+  if (row[ri]) { try { base = JSON.parse(row[ri]); } catch(e) {} }
 
   var n = function(v, fb) { return (v !== '' && v != null) ? +v : (fb || 0); };
   var s = function(v, fb) { return (v !== '' && v != null && String(v) !== '') ? String(v) : (fb || ''); };
