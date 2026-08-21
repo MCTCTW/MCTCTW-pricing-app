@@ -180,6 +180,30 @@ function saveSettings_(raw) {
   } finally { lock.releaseLock(); }
 }
 
+// 逐列找出這一列的 raw_json：先試目前寫入的位置(27)，再試舊版面(29)、整表抽樣得到的位置，最後才全掃
+function baseOfRow_(row, rawIdx) {
+  var tryIdx = [27, 29];
+  if (rawIdx != null && rawIdx >= 0 && tryIdx.indexOf(rawIdx) < 0) tryIdx.push(rawIdx);
+  for (var i = 0; i < tryIdx.length; i++) {
+    var o = parseBase_(row, tryIdx[i]);
+    if (o) return o;
+  }
+  for (var c = row.length - 1; c >= 0; c--) {
+    var o2 = parseBase_(row, c);
+    if (o2) return o2;
+  }
+  return {};
+}
+function parseBase_(row, idx) {
+  var v = row[idx];
+  if (typeof v !== 'string' || v.charAt(0) !== '{') return null;
+  try {
+    var o = JSON.parse(v);
+    if (o && o.id && String(o.id) === String(row[0])) return o;
+  } catch (e) {}
+  return null;
+}
+
 // 找出 raw_json 真正在第幾欄：先用標題名稱找，找不到就掃資料列——
 // 哪一欄的內容解得開 JSON 而且它的 id 跟 A 欄一致，那一欄就是（標題被改成別的名字也找得到）。
 function findRawIdx_(data) {
@@ -306,9 +330,9 @@ function rowToRecord(row, rawIdx) {
   var curRevMap  = { '韓幣':'KRW', '日幣':'JPY', '人民幣':'CNY', '港幣':'HKD', '台幣':'TWD' };
   var shipRevMap = { '韓國':'korea', '中國普貨':'china_normal', '中國特貨':'china_special', '日本':'japan', '香港':'hk' };
 
-  var base = {};
-  var ri = (rawIdx == null || rawIdx < 0) ? 27 : rawIdx;
-  if (row[ri]) { try { base = JSON.parse(row[ri]); } catch(e) {} }
+  // 🚨 這張表有兩種版面並存：現在的程式寫在第 28 欄（index 27），較早的資料在第 30 欄（index 29）。
+  //    所以不能用「整張表一個位置」，要逐列判斷——解得開 JSON 而且 id 跟 A 欄一致的那一欄才算數。
+  var base = baseOfRow_(row, rawIdx);
 
   var n = function(v, fb) { return (v !== '' && v != null) ? +v : (fb || 0); };
   var s = function(v, fb) { return (v !== '' && v != null && String(v) !== '') ? String(v) : (fb || ''); };
