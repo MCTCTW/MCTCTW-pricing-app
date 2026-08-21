@@ -1,9 +1,19 @@
 var SPREADSHEET_ID = '1G35XhlQUZY1icDFNEX86qHRrFSzOJDdvZjZ-WXwIx8E';
 var SHEET_NAME = 'ROOC定價記錄';
+var DEL_SHEET = '刪除註記';
+var VER = 'v2-upsert';   // 前端會檢查這個版本：不是這一版就不重試（舊版是無腦 appendRow，重試會生重複列）
 
 function doGet(e) {
   try {
     var action = e && e.parameter ? e.parameter.action : '';
+
+    if (action === 'ping') {
+      return jsonResponse({ success: true, ping: true, version: VER, ts: new Date().toISOString() });
+    }
+
+    if (action === 'deleteRecord') {
+      return jsonResponse(deleteRecord_(e.parameter.id, e.parameter.by));
+    }
 
     if (action === 'verifyPassword') {
       var stored = PropertiesService.getScriptProperties().getProperty('MASTER_PASSWORD');
@@ -29,27 +39,108 @@ function doGet(e) {
       return jsonResponse({ success: true, v: 1, items: buildProductIndex() });
     }
 
-    // 寫入報價記錄
+    // 寫入報價記錄（同一個 id 就覆蓋那一列，不再無腦 append 生重複列）
     if (e && e.parameter && e.parameter.data) {
-      var record = JSON.parse(e.parameter.data);
-      var sheet = getOrCreateSheet();
-      ensureHeaders(sheet);
-      sheet.appendRow(buildRow(record));
-      return jsonResponse({ success: true });
+      return jsonResponse(saveRecord_(JSON.parse(e.parameter.data)));
     }
 
     // 讀取全部記錄（從可視欄位讀，手動修改過的欄位會生效）
     var sheet = getOrCreateSheet();
     var data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return jsonResponse({ success: true, records: [] });
+    if (data.length <= 1) return jsonResponse({ success: true, records: [], dels: readDels_(), version: VER });
     var records = [];
+    var bad = 0;
     for (var i = 1; i < data.length; i++) {
       if (!data[i][0]) continue;
-      try { records.push(rowToRecord(data[i])); } catch(e2) {}
+      try { records.push(rowToRecord(data[i])); } catch(e2) { bad++; }
     }
-    return jsonResponse({ success: true, records: records });
+    return jsonResponse({ success: true, records: records, dels: readDels_(), bad: bad, version: VER });
   } catch(err) {
     return jsonResponse({ success: false, error: err.message });
+  }
+}
+
+// ---------- 寫入：以 id upsert（重複列時更新最後一列，跟讀取的「後者覆蓋前者」一致） ----------
+function saveRecord_(record) {
+  if (!record || !record.id) return { success: false, fatal: true, error: '這筆沒有 id，無法寫入' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch (_) { return { success: false, error: '後端忙碌中，稍後自動重試', version: VER }; }
+  try {
+    var sheet = getOrCreateSheet();
+    ensureHeaders(sheet);
+    var row = buildRow(record);
+    var target = findRowById_(sheet, record.id);
+    if (target > 0) sheet.getRange(target, 1, 1, row.length).setValues([row]);
+    else sheet.appendRow(row);
+    unDelete_(record.id);                       // 重新存同一個 id＝這筆又活了，把刪除註記清掉
+    return { success: true, mode: target > 0 ? 'update' : 'append', version: VER };
+  } catch (err) {
+    return { success: false, error: err.message, version: VER };
+  } finally {
+    lock.releaseLock();
+  }
+}
+function findRowById_(sheet, id) {
+  if (!id) return -1;
+  var last = sheet.getLastRow();
+  if (last < 2) return -1;
+  var col = sheet.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = col.length - 1; i >= 0; i--) {          // 由下往上：有重複列時以最後一列為準
+    if (String(col[i][0]) === String(id)) return i + 2;
+  }
+  return -1;
+}
+
+// ---------- 刪除：真的從表上移除，並留下註記（否則別台一同步就把它寫回來） ----------
+function getDelSheet_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(DEL_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(DEL_SHEET);
+    sh.getRange(1, 1, 1, 3).setValues([['ID', '刪除時間', '操作者']]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+function readDels_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(DEL_SHEET);
+  if (!sh || sh.getLastRow() < 2) return [];
+  return sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues()
+    .map(function (r) { return String(r[0]); })
+    .filter(function (x) { return x; });
+}
+function unDelete_(id) {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(DEL_SHEET);
+  if (!sh || sh.getLastRow() < 2) return;
+  var col = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+  for (var i = col.length - 1; i >= 0; i--) {
+    if (String(col[i][0]) === String(id)) sh.deleteRow(i + 2);
+  }
+}
+function deleteRecord_(id, by) {
+  if (!id) return { success: false, fatal: true, error: '沒有指定 id' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); }
+  catch (_) { return { success: false, error: '後端忙碌中，稍後自動重試', version: VER }; }
+  try {
+    var sheet = getOrCreateSheet();
+    var last = sheet.getLastRow();
+    var removed = 0;
+    if (last >= 2) {
+      var col = sheet.getRange(2, 1, last - 1, 1).getValues();
+      for (var i = col.length - 1; i >= 0; i--) {       // 由下往上刪，索引才不會位移
+        if (String(col[i][0]) === String(id)) { sheet.deleteRow(i + 2); removed++; }
+      }
+    }
+    getDelSheet_().appendRow([String(id), new Date(), by || '']);
+    return { success: true, deleted: removed, version: VER };
+  } catch (err) {
+    return { success: false, error: err.message, version: VER };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -62,14 +153,18 @@ function getOrCreateSettingsSheet() {
 
 function doPost(e) {
   try {
-    var raw = e.parameter.data || e.postData.contents;
-    var record = JSON.parse(raw);
-    var sheet = getOrCreateSheet();
-    if (sheet.getLastRow() === 0) writeHeaders(sheet);
-    sheet.appendRow(buildRow(record));
-    return jsonResponse({ success: true });
+    var raw = (e && e.parameter && e.parameter.data) || (e && e.postData && e.postData.contents) || '';
+    var body = JSON.parse(raw);
+    // 支援兩種：單筆紀錄，或 {records:[...]} 一次補傳多筆（前端離線佇列恢復時用）
+    if (body && body.records && body.records.length) {
+      var out = [];
+      for (var i = 0; i < body.records.length; i++) out.push(saveRecord_(body.records[i]));
+      var okAll = out.every(function (r) { return r.success; });
+      return jsonResponse({ success: okAll, results: out, version: VER });
+    }
+    return jsonResponse(saveRecord_(body));
   } catch(err) {
-    return jsonResponse({ success: false, error: err.message });
+    return jsonResponse({ success: false, error: err.message, version: VER });
   }
 }
 
@@ -124,6 +219,9 @@ function ensureHeaders(sheet) {
 }
 
 // 從可視欄位還原 record（讓手動修改的欄位在同步後生效）
+// 🚨 一定要「先把 raw_json 整包展開當底」再用可視欄位覆蓋：代運計價的實際運回日期／基礎運費／營業稅／
+//    金流手續費、合作開團的成本／服務費／驗貨費／國際運費、親友價這些欄位在表上沒有欄，
+//    以前直接回傳新物件 → 同步一次就把本機那些欄位清成 undefined 並寫死。
 function rowToRecord(row) {
   var typeRevMap = { '一般定價':'regular', '連線定價':'live', '合作開團':'partner', '代運計價':'forward' };
   var curRevMap  = { '韓幣':'KRW', '日幣':'JPY', '人民幣':'CNY', '港幣':'HKD', '台幣':'TWD' };
@@ -135,7 +233,9 @@ function rowToRecord(row) {
   var n = function(v, fb) { return (v !== '' && v != null) ? +v : (fb || 0); };
   var s = function(v, fb) { return (v !== '' && v != null && String(v) !== '') ? String(v) : (fb || ''); };
 
-  return {
+  var out = {};
+  for (var k in base) out[k] = base[k];        // 先繼承 raw_json 的完整內容
+  var vis = {
     id:            s(row[0], base.id),
     timestamp:     base.timestamp || '',
     type:          typeRevMap[row[2]] || base.type || '',
@@ -162,6 +262,9 @@ function rowToRecord(row) {
     savedBy:       s(row[23], base.savedBy),
     url:           s(row[24], base.url)
   };
+  for (var k2 in vis) out[k2] = vis[k2];        // 可視欄位覆蓋（會計手動改過的會生效）
+  if (!out.timestamp && row[1]) { try { out.timestamp = new Date(row[1]).toISOString(); } catch (e3) {} }
+  return out;
 }
 
 function buildRow(r) {
@@ -211,6 +314,29 @@ function buildRow(r) {
     JSON.stringify(r),
     r.localShipOriginal || ''  // 當地運費(原幣)
   ];
+}
+
+// ---------- 一次性維護：清掉重複 id 的舊列（保留最後一列＝最新版本） ----------
+// 用法：Apps Script 編輯器選這個函數 → 執行。會先複製一份備份分頁再刪，安全。
+function dedupeRecords() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = getOrCreateSheet();
+  var last = sheet.getLastRow();
+  if (last < 3) return '沒有資料需要處理';
+  var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
+  var seen = {}, kill = [];
+  for (var i = ids.length - 1; i >= 0; i--) {          // 由下往上：先看到的是最新的，保留
+    var id = String(ids[i][0]);
+    if (!id) continue;
+    if (seen[id]) kill.push(i + 2); else seen[id] = 1;
+  }
+  if (!kill.length) return '沒有重複的 id';
+  sheet.copyTo(ss).setName('備份_' + Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd_HHmmss'));
+  kill.sort(function (a, b) { return b - a; });
+  for (var j = 0; j < kill.length; j++) sheet.deleteRow(kill[j]);
+  var msg = '✅ 已刪掉 ' + kill.length + ' 列重複（保留每個 id 最後一列），刪除前已另存備份分頁';
+  Logger.log(msg);
+  return msg;
 }
 
 function setMasterPassword() {

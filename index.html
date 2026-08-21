@@ -1104,7 +1104,19 @@ function init() {
   bindCurrencyTabs('live-currency-tabs', 'live');
   fillSettingsUI();
   renderRecords();
+  renderSyncBar();
   syncSettingsFromCloud();
+  pingBackend();
+  // 同一台開兩個分頁：別的分頁存了東西，這個分頁跟著更新（以前會互相覆蓋）
+  window.addEventListener('storage', e => {
+    if (e.key === 'rooc_records') { loadRecords(); renderRecords(); renderSyncBar(); }
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && pendingIds.length) flushCloudQueue(false); });
+  window.addEventListener('online', () => { if (pendingIds.length) flushCloudQueue(false); });
+  window.addEventListener('beforeunload', e => {
+    if (pendingIds.length && settings.gas_url) { e.preventDefault(); e.returnValue = '還有記錄沒存上雲端，確定要離開嗎？'; return e.returnValue; }
+  });
+  setInterval(() => { if (pendingIds.length && !document.hidden) flushCloudQueue(false); }, 120000);
 }
 
 // ============================================================
@@ -1264,8 +1276,13 @@ function saveSettings() {
 }
 
 function resetSettings() {
-  if (!confirm('確定要恢復所有預設值嗎？')) return;
+  if (!confirm('確定要恢復所有預設值嗎？（雲端網址、試算表網址、你的名字會保留）')) return;
+  // 🚨 以前連 gas_url 一起還原成空 → 之後存的記錄只會留在這台，畫面卻說已儲存，最後被覆蓋就永久消失
+  const keep = { gas_url: settings.gas_url, sheet_url: settings.sheet_url, saved_by: settings.saved_by };
   settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  settings.gas_url = keep.gas_url;
+  settings.sheet_url = keep.sheet_url;
+  settings.saved_by = keep.saved_by;
   saveSettingsToStorage();
   fillSettingsUI();
   renderPartnerCards();
@@ -1698,15 +1715,38 @@ function removePartner(index) {
 // ============================================================
 // RECORDS
 // ============================================================
+const NEED_BACKEND_VER = 'v2-upsert';   // 後端要跑這一版才准重試（舊版是無腦 append，重試會生重複列）
+let backendVer = null, pendingIds = [], deletedIds = [], syncing = false, retryTimer = null, lastErr = '';
+
 function loadRecords() {
   try {
     const r = localStorage.getItem('rooc_records');
     records = r ? JSON.parse(r) : [];
   } catch(e) { records = []; }
+  try { pendingIds = JSON.parse(localStorage.getItem('rooc_pending') || '[]') || []; } catch(e) { pendingIds = []; }
+  try { deletedIds = JSON.parse(localStorage.getItem('rooc_dels') || '[]') || []; } catch(e) { deletedIds = []; }
 }
 
+// 🚨 以前是把「這個分頁記憶體裡的整包 records」蓋回 localStorage：
+//    同一台開兩個分頁，舊分頁存 1 筆就把新分頁存的整批洗掉（就是「存前先 reload、存後驗 after=before+N」的由來）。
+//    改成寫入前先把硬碟上那份讀回來合併——localStorage 是同步的，讀回來就是別的分頁剛寫的最新版。
 function saveRecordsToStorage() {
-  localStorage.setItem('rooc_records', JSON.stringify(records));
+  let disk = [];
+  try { disk = JSON.parse(localStorage.getItem('rooc_records') || '[]') || []; } catch(e) { disk = []; }
+  const map = new Map();
+  disk.forEach(r => { if (r && r.id) map.set(String(r.id), r); });
+  records.forEach(r => { if (r && r.id) map.set(String(r.id), r); });   // 這個分頁的比較新
+  const dels = delIdSet();          // 🚨 deletedIds 是物件陣列，直接 map(String) 會變成 "[object Object]" → 墓碑等於失效
+  records = [...map.values()].filter(r => !dels.has(String(r.id)));
+  records.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  try {
+    localStorage.setItem('rooc_records', JSON.stringify(records));
+    localStorage.setItem('rooc_pending', JSON.stringify(pendingIds));
+    localStorage.setItem('rooc_dels', JSON.stringify(deletedIds));
+  } catch(e) {
+    showToast('⚠️ 本機空間不足或無痕模式，這筆沒存進本機');
+    console.error('localStorage 寫入失敗', e);
+  }
 }
 
 function saveRecord(type) {
@@ -1814,6 +1854,7 @@ function saveRecord(type) {
   }
 
   records.unshift(record);
+  queueForCloud(record.id);
   saveRecordsToStorage();
 
   // Try cloud sync
@@ -1876,9 +1917,14 @@ function pushSettingsToCloud() {
     _pushedAt: new Date().toISOString()
   };
   const encoded = encodeURIComponent(JSON.stringify(syncSettings));
-  const img = new Image();
-  img.onload = img.onerror = () => showToast('✅ 設定已推送，同事下次開 APP 自動套用');
-  img.src = url + '?action=saveSettings&data=' + encoded;
+  showToast('推送中…');
+  fetch(url + '?action=saveSettings&data=' + encoded)
+    .then(x => x.json())
+    .then(r => {
+      if (r && r.success) showToast('✅ 設定已推送，同事下次開 APP 自動套用');
+      else showToast('❌ 設定推送失敗：' + ((r && r.error) || '後端沒回報成功'));
+    })
+    .catch(e => showToast('❌ 設定推送失敗：' + e.message));
 }
 
 function syncSettingsFromCloud() {
@@ -1905,16 +1951,106 @@ function syncSettingsFromCloud() {
     .catch(() => {}); // 靜默失敗，不影響使用
 }
 
-function syncToGAS(record) {
+// ============================================================
+// 雲端同步（🚨 舊版用 new Image() 送，而且 onload 與 onerror 指到同一個函式
+//            → 斷網／後端掛掉／根本沒設網址，一律跳綠字「已同步至雲端」。
+//            改成 fetch POST 並實際判斷後端回的 success。）
+// ============================================================
+function delIdSet() {
+  return new Set(deletedIds.map(d => String(d && d.id != null ? d.id : d)));
+}
+function queueForCloud(id) {
+  if (!id) return;
+  id = String(id);
+  if (pendingIds.indexOf(id) < 0) pendingIds.push(id);
+}
+function renderSyncBar() {
+  let bar = document.getElementById('sync-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'sync-bar';
+    bar.style.cssText = 'display:none;position:sticky;top:0;z-index:150;margin:0 0 10px;padding:9px 12px;border-radius:10px;background:#FDECEC;border:1px solid #E9A9A9;color:#9B2C2C;font-size:13px;line-height:1.5;';
+    const app = document.getElementById('app');
+    if (app) app.insertBefore(bar, app.firstChild.nextSibling);
+  }
+  let html = '';
+  if (!settings.gas_url) {
+    if (records.length) html = '⚠️ 這台還沒設定雲端網址，存的記錄<b>只在這台裝置</b>，同事看不到也不會進試算表。請到「設定」貼上雲端網址。';
+  } else if (backendVer && backendVer !== NEED_BACKEND_VER) {
+    html = '⚠️ 雲端後端還是舊版（' + backendVer + '），為了不產生重複列已暫停上傳；目前有 ' + pendingIds.length + ' 筆等著傳。請先更新 GAS 部署。';
+  } else if (pendingIds.length) {
+    html = '⚠️ 有 ' + pendingIds.length + ' 筆還沒存上雲端' + (lastErr ? '（' + lastErr + '）' : '') + '。<b>先別關掉這個分頁</b>，會自動重試。' +
+           '<button onclick="flushCloudQueue(true)" style="margin-left:8px;padding:3px 9px;border-radius:7px;border:1px solid #C86A6A;background:#fff;color:#9B2C2C;font-size:12px;cursor:pointer;">立即重試</button>';
+  }
+  bar.innerHTML = html;
+  bar.style.display = html ? 'block' : 'none';
+}
+async function gasPost(record) {
   const url = settings.gas_url;
-  if (!url) return;
-  // 用 Image 方式發送，完全繞過 CORS／重新導向問題
-  const encoded = encodeURIComponent(JSON.stringify(record));
-  const img = new Image();
-  img.onload = img.onerror = function() {
-    showToast('☁️ 已同步至雲端');
-  };
-  img.src = url + '?data=' + encoded;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(record)
+  }).then(x => x.text()).then(t => {
+    if (/^\s*</.test(t)) throw new Error('後端暫時回了網頁不是資料');
+    return JSON.parse(t);
+  });
+  if (r && r.version) backendVer = r.version;
+  return r;
+}
+function syncToGAS(record) {
+  queueForCloud(record && record.id);
+  flushCloudQueue(false);
+}
+async function flushCloudQueue(manual) {
+  if (syncing) return;
+  const url = settings.gas_url;
+  if (!url) { renderSyncBar(); if (manual) showToast('⚠️ 還沒設定雲端網址'); return; }
+  if (!pendingIds.length && !deletedIds.some(d => d && d.pend)) { lastErr = ''; renderSyncBar(); if (manual) showToast('✅ 沒有待上傳的記錄'); return; }
+  // 後端還是舊版就先不要送：舊版是無腦 append，重試會生出重複列（查價會撈到錯的）
+  if (backendVer && backendVer !== NEED_BACKEND_VER) { renderSyncBar(); if (manual) showToast('⚠️ 後端還是舊版，請先更新 GAS 部署'); return; }
+  syncing = true;
+  clearTimeout(retryTimer);
+  let ok = 0, failed = 0;
+  lastErr = '';
+  try {
+    for (const d of deletedIds.filter(x => x && x.pend)) {           // 先送刪除，免得等一下又被寫回去
+      try {
+        const r = await fetch(url + '?action=deleteRecord&id=' + encodeURIComponent(d.id) + '&by=' + encodeURIComponent(settings.saved_by || ''))
+          .then(x => x.json());
+        if (r && r.success) { d.pend = false; ok++; } else { failed++; lastErr = (r && r.error) || '刪除失敗'; }
+      } catch (e) { failed++; lastErr = e.message; }
+    }
+    for (const id of [...pendingIds]) {
+      const rec = records.find(x => String(x.id) === String(id));
+      if (!rec) { pendingIds = pendingIds.filter(x => x !== id); continue; }   // 已被刪掉
+      try {
+        const r = await gasPost(rec);
+        if (r && r.success) { pendingIds = pendingIds.filter(x => x !== id); ok++; }
+        else { failed++; lastErr = (r && r.error) || '寫入失敗'; if (r && r.fatal) pendingIds = pendingIds.filter(x => x !== id); }
+      } catch (e) { failed++; lastErr = e.message; break; }        // 網路斷了就不用繼續打
+    }
+  } finally {
+    syncing = false;
+    saveRecordsToStorage();
+    renderSyncBar();
+  }
+  if (ok && !failed) showToast('☁️ 已同步 ' + ok + ' 筆至雲端');
+  if (failed) {
+    retryTimer = setTimeout(() => flushCloudQueue(false), 15000);
+    if (manual) showToast('❌ 還有 ' + pendingIds.length + ' 筆沒上傳：' + lastErr);
+  }
+}
+// 開頁先問後端版本（順便確認網址真的通）
+async function pingBackend() {
+  const url = settings.gas_url;
+  if (!url) { renderSyncBar(); return; }
+  try {
+    const r = await fetch(url + '?action=ping&t=' + Date.now()).then(x => x.json());
+    backendVer = (r && r.version) || 'legacy（沒回報版本）';
+  } catch (e) { backendVer = null; }
+  renderSyncBar();
+  if (pendingIds.length) flushCloudQueue(false);
 }
 
 function loadFromGAS() {
@@ -1927,18 +2063,32 @@ function loadFromGAS() {
     .then(res => res.json())
     .then(data => {
       if (!data.success) throw new Error(data.error || '同步失敗');
+      if (data.version) backendVer = data.version;
       const remote = (data.records || []).filter(r => r.id && r.type);
-      let added = 0, updated = 0;
+      const cloudDels = new Set((data.dels || []).map(String));
+      const localDels = delIdSet();
+      let added = 0, updated = 0, removed = 0;
       remote.forEach(r => {
-        const idx = records.findIndex(x => x.id === r.id);
-        if (idx === -1) { records.push(r); added++; }
-        else { records[idx] = r; updated++; }
+        if (localDels.has(String(r.id))) return;                 // 這台刪掉的，別讓它復活
+        const idx = records.findIndex(x => String(x.id) === String(r.id));
+        if (idx === -1) { records.push(r); added++; return; }
+        // 🚨 不可以整筆取代：後端是從可視欄位重組的，代運/合作開團專屬欄位與親友價不在欄位裡，
+        //    整筆換掉會把本機那些欄位清成 undefined 並寫死。只讓「有值的欄位」覆蓋。
+        const merged = Object.assign({}, records[idx]);
+        Object.keys(r).forEach(k => { const v = r[k]; if (v !== undefined && v !== null && v !== '') merged[k] = v; });
+        records[idx] = merged; updated++;
       });
-      records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      if (cloudDels.size) {                                       // 別台刪掉的，這台也拿掉
+        const before = records.length;
+        records = records.filter(x => !cloudDels.has(String(x.id)));
+        removed = before - records.length;
+      }
+      records.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
       saveRecordsToStorage();
       renderRecords();
-      const msg = added > 0 || updated > 0
-        ? `☁️ 同步完成，新增 ${added} 筆、更新 ${updated} 筆`
+      renderSyncBar();
+      const msg = added > 0 || updated > 0 || removed > 0
+        ? `☁️ 同步完成，新增 ${added} 筆、更新 ${updated} 筆${removed ? '、移除 ' + removed + ' 筆(別台刪的)' : ''}`
         : '☁️ 已是最新，無變更';
       showToast(msg);
     })
@@ -1954,21 +2104,19 @@ function testGASConnection() {
   const btn = document.getElementById('gas-test-btn');
   btn.textContent = '測試中…';
   btn.disabled = true;
-  const testRecord = {
-    id: 'test_' + Date.now(),
-    type: 'regular',
-    timestamp: new Date().toISOString(),
-    product: '【連線測試 — 可刪除】',
-    customer: '', notes: '測試列'
-  };
-  const encoded = encodeURIComponent(JSON.stringify(testRecord));
-  const img = new Image();
-  img.onload = img.onerror = function() {
-    btn.textContent = '🔗 測試連線';
-    btn.disabled = false;
-    alert('✅ 請求已送出！\n\n請開啟試算表，確認是否出現「連線測試」那列。\n若有出現 → 同步正常\n若沒有 → GAS 請重新部署（選新版本）');
-  };
-  img.src = url + '?data=' + encoded;
+  // 🚨 舊版是往試算表塞一列「連線測試」再叫人自己去看，而且不管成功失敗都說「已送出」。
+  //    改成直接問後端版本，真的通才算通（也不會再留垃圾列）。
+  fetch(url + '?action=ping&t=' + Date.now())
+    .then(x => x.json())
+    .then(r => {
+      btn.textContent = '🔗 測試連線'; btn.disabled = false;
+      if (!(r && r.success)) { alert('❌ 連線失敗：後端沒回報成功'); return; }
+      backendVer = r.version || 'legacy（沒回報版本）';
+      renderSyncBar();
+      if (backendVer === NEED_BACKEND_VER) alert('✅ 連線正常，後端版本 ' + backendVer);
+      else alert('⚠️ 連線得到，但後端還是舊版（' + backendVer + '）。\n舊版存檔會產生重複列，請把最新的 gas-script.gs 貼上去、部署→管理部署作業→編輯→版本選「新版本」。');
+    })
+    .catch(e => { btn.textContent = '🔗 測試連線'; btn.disabled = false; alert('❌ 連線失敗：' + e.message); });
 }
 
 function openSheet() {
@@ -2095,11 +2243,15 @@ function showDetail(id) {
 
   document.getElementById('detail-modal-content').innerHTML = html;
   document.getElementById('detail-delete-btn').onclick = () => {
-    if (!confirm('確定刪除此記錄？')) return;
-    records = records.filter(x => x.id !== id);
+    if (!confirm('確定刪除此記錄？（雲端試算表那列也會一起刪掉）')) return;
+    records = records.filter(x => String(x.id) !== String(id));
+    if (!deletedIds.some(d => String(d && d.id ? d.id : d) === String(id))) {
+      deletedIds.push({ id: String(id), t: Date.now(), pend: true });   // 留墓碑：不然按一次「從雲端同步」就復活
+    }
     saveRecordsToStorage();
     closeModal('detail-modal');
     renderRecords();
+    flushCloudQueue(false);
   };
   document.getElementById('detail-modal').classList.add('open');
 }
