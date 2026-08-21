@@ -46,13 +46,12 @@ function doGet(e) {
     var sheet = getOrCreateSheet();
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return jsonResponse({ success: true, records: [], dels: readDels_(), version: VER });
-    // 🚨 有人在試算表中間插一欄，所有欄位就整片右移；舊版照讀不誤 → 1,100 筆錯位資料會被寫死進每個人的本機。
-    var head = data[0], schemaBad = [];
-    for (var h = 0; h < EXPECTED_HEADERS.length; h++) {
-      if (String(head[h] || '').trim() !== EXPECTED_HEADERS[h]) schemaBad.push((h + 1) + ':應為「' + EXPECTED_HEADERS[h] + '」');
-    }
-    if (schemaBad.length) {
-      return jsonResponse({ success: false, error: 'SHEET_SCHEMA_CHANGED', bad: schemaBad.slice(0, 5), version: VER });
+    // 🚨 有人在試算表中間插一欄，所有欄位就整片右移；舊版照讀不誤 → 1,400 筆錯位資料會被寫死進每個人的本機。
+    //    但標題名稱本來就被自訂過（這張表的標題跟程式碼裡的預設不一樣），所以不能比字，要比「對位」：
+    //    用 raw_json 裡的 id 跟 A 欄的 ID 對，對不起來才是真的位移。
+    var shift = schemaShift_(data);
+    if (shift) {
+      return jsonResponse({ success: false, error: 'SHEET_SCHEMA_CHANGED', bad: [shift], version: VER });
     }
     var records = [];
     var bad = 0;
@@ -179,6 +178,26 @@ function saveSettings_(raw) {
   } catch (err) {
     return { success: false, error: err.message, version: VER };
   } finally { lock.releaseLock(); }
+}
+
+// 欄位有沒有整片位移：抽樣幾列，raw_json（第 28 欄）解得開、而且它的 id 跟 A 欄一致 → 沒位移。
+// 只比標題文字是不行的：這張表的標題早就被自訂過，比字會誤判成位移而擋掉所有同步。
+function schemaShift_(data) {
+  var checked = 0, bad = 0;
+  for (var i = 1; i < data.length && checked < 8; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    var raw = row[27];
+    if (!raw) continue;
+    checked++;
+    var b = null;
+    try { b = JSON.parse(raw); } catch (e) { bad++; continue; }
+    if (b && b.id && String(b.id) !== String(row[0])) bad++;
+  }
+  if (checked >= 3 && bad >= Math.ceil(checked / 2)) {
+    return '欄位疑似整片位移：抽驗 ' + checked + ' 列有 ' + bad + ' 列的 raw_json 對不上 ID 欄，可能有人在中間插了欄位';
+  }
+  return '';
 }
 
 function getOrCreateSettingsSheet() {
