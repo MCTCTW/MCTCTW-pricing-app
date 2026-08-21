@@ -1109,7 +1109,12 @@ function init() {
   pingBackend();
   // 同一台開兩個分頁：別的分頁存了東西，這個分頁跟著更新（以前會互相覆蓋）
   window.addEventListener('storage', e => {
-    if (e.key === 'rooc_records') { loadRecords(); renderRecords(); renderSyncBar(); }
+    if (e.key !== 'rooc_records') return;
+    // 只重讀紀錄，不要碰 pendingIds/deletedIds：正在上傳時把佇列從硬碟回滾，刪除會被重送、後端每次多一列註記
+    try { records = JSON.parse(e.newValue || '[]') || []; } catch (err) { return; }
+    const dels = delIdSet();
+    records = records.filter(r => r && r.id && !dels.has(String(r.id)));
+    renderRecords(); renderSyncBar();
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && pendingIds.length) flushCloudQueue(false); });
   window.addEventListener('online', () => { if (pendingIds.length) flushCloudQueue(false); });
@@ -1157,7 +1162,9 @@ function deepMerge(base, override) {
 }
 
 function saveSettingsToStorage() {
-  localStorage.setItem('rooc_settings', JSON.stringify(settings));
+  // 無痕模式／配額爆掉時 setItem 會丟例外；以前沒接住 → 連 init() 都起不來（整頁空白）
+  try { localStorage.setItem('rooc_settings', JSON.stringify(settings)); }
+  catch (e) { console.error('設定寫入失敗', e); try { showToast('⚠️ 本機空間不足，設定沒存起來'); } catch (e2) {} }
 }
 
 function fillSettingsUI() {
@@ -1725,6 +1732,15 @@ function loadRecords() {
   } catch(e) { records = []; }
   try { pendingIds = JSON.parse(localStorage.getItem('rooc_pending') || '[]') || []; } catch(e) { pendingIds = []; }
   try { deletedIds = JSON.parse(localStorage.getItem('rooc_dels') || '[]') || []; } catch(e) { deletedIds = []; }
+  // 墓碑只留 90 天（跟後端的視窗一致）：留著不修剪的話，被刪過的 id 在這台永遠再也存不進去
+  const cut = Date.now() - 90 * 86400000;
+  deletedIds = deletedIds.filter(d => d && (d.pend || !d.t || d.t >= cut));
+}
+// 重新存同一個 id（或雲端又出現這筆）＝它又活了 → 把墓碑拿掉，不然 saveRecordsToStorage 會靜默過濾掉它
+function unTombstone(id) {
+  const before = deletedIds.length;
+  deletedIds = deletedIds.filter(d => String(d && d.id != null ? d.id : d) !== String(id));
+  return deletedIds.length !== before;
 }
 
 // 🚨 以前是把「這個分頁記憶體裡的整包 records」蓋回 localStorage：
@@ -1738,7 +1754,7 @@ function saveRecordsToStorage() {
   records.forEach(r => { if (r && r.id) map.set(String(r.id), r); });   // 這個分頁的比較新
   const dels = delIdSet();          // 🚨 deletedIds 是物件陣列，直接 map(String) 會變成 "[object Object]" → 墓碑等於失效
   records = [...map.values()].filter(r => !dels.has(String(r.id)));
-  records.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  records.sort((a, b) => (+new Date(b.timestamp) || 0) - (+new Date(a.timestamp) || 0));
   try {
     localStorage.setItem('rooc_records', JSON.stringify(records));
     localStorage.setItem('rooc_pending', JSON.stringify(pendingIds));
@@ -1749,8 +1765,14 @@ function saveRecordsToStorage() {
   }
 }
 
+// 🚨 舊版 id 用 Date.now()：同一毫秒存兩筆就撞號。以前撞號只是多一列，
+//    改成 upsert 之後撞號＝後存的那筆把前一筆蓋掉（本機 Map 也只留一筆）→ 靜默掉單。
+function newId() {
+  try { if (crypto && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, ''); } catch (e) {}
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
 function saveRecord(type) {
-  let record = { id: Date.now().toString(), type, timestamp: new Date().toISOString(), savedBy: settings.saved_by || '' };
+  let record = { id: newId(), type, timestamp: new Date().toISOString(), savedBy: settings.saved_by || '' };
 
   if (type === 'regular') {
     const price     = parseFloat(document.getElementById('regular-price').value) || 0;
@@ -1854,6 +1876,7 @@ function saveRecord(type) {
   }
 
   records.unshift(record);
+  unTombstone(record.id);
   queueForCloud(record.id);
   saveRecordsToStorage();
 
@@ -2009,6 +2032,8 @@ async function flushCloudQueue(manual) {
   if (!pendingIds.length && !deletedIds.some(d => d && d.pend)) { lastErr = ''; renderSyncBar(); if (manual) showToast('✅ 沒有待上傳的記錄'); return; }
   // 後端還是舊版就先不要送：舊版是無腦 append，重試會生出重複列（查價會撈到錯的）
   if (backendVer && backendVer !== NEED_BACKEND_VER) { renderSyncBar(); if (manual) showToast('⚠️ 後端還是舊版，請先更新 GAS 部署'); return; }
+  // 版本還不知道（ping 逾時／還沒跑）→ 只送一次、不排重試，避免萬一對面是舊的 append 後端而量產重複列
+  const unknownBackend = !backendVer;
   syncing = true;
   clearTimeout(retryTimer);
   let ok = 0, failed = 0;
@@ -2033,11 +2058,18 @@ async function flushCloudQueue(manual) {
   } finally {
     syncing = false;
     saveRecordsToStorage();
+    renderRecords();
     renderSyncBar();
+  }
+  // 🚨 送出期間又存了新的（批次存檔就是這樣）→ 那些 id 只是被推進佇列，沒人再跑一次 → 要續跑，
+  //    不然一次存 6 筆只有第 1 筆上得去，其餘要等兩分鐘的定時器。
+  if (!failed && (pendingIds.length || deletedIds.some(d => d && d.pend))) {
+    setTimeout(() => flushCloudQueue(false), 0);
+    return;
   }
   if (ok && !failed) showToast('☁️ 已同步 ' + ok + ' 筆至雲端');
   if (failed) {
-    retryTimer = setTimeout(() => flushCloudQueue(false), 15000);
+    if (!unknownBackend) retryTimer = setTimeout(() => flushCloudQueue(false), 15000);
     if (manual) showToast('❌ 還有 ' + pendingIds.length + ' 筆沒上傳：' + lastErr);
   }
 }
@@ -2062,14 +2094,23 @@ function loadFromGAS() {
   fetch(url + '?t=' + Date.now())
     .then(res => res.json())
     .then(data => {
+      if (data && data.error === 'SHEET_SCHEMA_CHANGED') {
+        // 試算表被插欄／改標題 → 讀回來的每一欄都會錯位。寧可不同步，也不要把錯位資料寫死進本機。
+        lastErr = '試算表欄位被更動';
+        renderSyncBar();
+        alert('⚠️ 雲端試算表的標題列被更動過（可能有人插了一欄），現在同步會讓所有欄位錯位。\n已停止同步、本機資料沒有被更動。\n請先把試算表欄位改回原樣，或找 Mei 處理。\n\n' + (data.bad || []).join('\n'));
+        return;
+      }
       if (!data.success) throw new Error(data.error || '同步失敗');
       if (data.version) backendVer = data.version;
       const remote = (data.records || []).filter(r => r.id && r.type);
       const cloudDels = new Set((data.dels || []).map(String));
       const localDels = delIdSet();
       let added = 0, updated = 0, removed = 0;
+      const pend = new Set(pendingIds.map(String));
       remote.forEach(r => {
         if (localDels.has(String(r.id))) return;                 // 這台刪掉的，別讓它復活
+        if (pend.has(String(r.id))) return;                      // 這台還沒上傳成功的＝本機才是新的，別被雲端舊版蓋掉
         const idx = records.findIndex(x => String(x.id) === String(r.id));
         if (idx === -1) { records.push(r); added++; return; }
         // 🚨 不可以整筆取代：後端是從可視欄位重組的，代運/合作開團專屬欄位與親友價不在欄位裡，
@@ -2083,7 +2124,7 @@ function loadFromGAS() {
         records = records.filter(x => !cloudDels.has(String(x.id)));
         removed = before - records.length;
       }
-      records.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+      records.sort((a, b) => (+new Date(b.timestamp) || 0) - (+new Date(a.timestamp) || 0));
       saveRecordsToStorage();
       renderRecords();
       renderSyncBar();

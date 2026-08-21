@@ -22,9 +22,7 @@ function doGet(e) {
     }
 
     if (action === 'saveSettings') {
-      var settingsSheet = getOrCreateSettingsSheet();
-      settingsSheet.getRange('A1').setValue(e.parameter.data);
-      return jsonResponse({ success: true });
+      return jsonResponse(saveSettings_(e.parameter.data));
     }
 
     if (action === 'getSettings') {
@@ -48,6 +46,14 @@ function doGet(e) {
     var sheet = getOrCreateSheet();
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return jsonResponse({ success: true, records: [], dels: readDels_(), version: VER });
+    // 🚨 有人在試算表中間插一欄，所有欄位就整片右移；舊版照讀不誤 → 1,100 筆錯位資料會被寫死進每個人的本機。
+    var head = data[0], schemaBad = [];
+    for (var h = 0; h < EXPECTED_HEADERS.length; h++) {
+      if (String(head[h] || '').trim() !== EXPECTED_HEADERS[h]) schemaBad.push((h + 1) + ':應為「' + EXPECTED_HEADERS[h] + '」');
+    }
+    if (schemaBad.length) {
+      return jsonResponse({ success: false, error: 'SHEET_SCHEMA_CHANGED', bad: schemaBad.slice(0, 5), version: VER });
+    }
     var records = [];
     var bad = 0;
     for (var i = 1; i < data.length; i++) {
@@ -107,9 +113,15 @@ function readDels_() {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sh = ss.getSheetByName(DEL_SHEET);
   if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues()
-    .map(function (r) { return String(r[0]); })
-    .filter(function (x) { return x; });
+  var v = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  var cut = Date.now() - 90 * 86400000;      // 只回 90 天內：不然這串會無限長大，每次讀取都多背一包
+  var out = [];
+  for (var i = 0; i < v.length; i++) {
+    if (!v[i][0]) continue;
+    var t = v[i][1] ? new Date(v[i][1]).getTime() : 0;
+    if (!t || t >= cut) out.push(String(v[i][0]));
+  }
+  return out;
 }
 function unDelete_(id) {
   var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -135,13 +147,38 @@ function deleteRecord_(id, by) {
         if (String(col[i][0]) === String(id)) { sheet.deleteRow(i + 2); removed++; }
       }
     }
-    getDelSheet_().appendRow([String(id), new Date(), by || '']);
+    var dsh = getDelSheet_();
+    var already = false;
+    if (dsh.getLastRow() >= 2) {
+      var col = dsh.getRange(2, 1, dsh.getLastRow() - 1, 1).getValues();
+      for (var j = 0; j < col.length; j++) { if (String(col[j][0]) === String(id)) { already = true; break; } }
+    }
+    if (!already) dsh.appendRow([String(id), new Date(), by || '']);   // 重送刪除不要一直長註記列
     return { success: true, deleted: removed, version: VER };
   } catch (err) {
     return { success: false, error: err.message, version: VER };
   } finally {
     lock.releaseLock();
   }
+}
+
+// 設定推送：先驗證是不是合法且完整的設定，再把舊的往下推一格保留 4 版（推壞了救得回來）
+function saveSettings_(raw) {
+  if (!raw) return { success: false, fatal: true, error: '沒有資料', version: VER };
+  var parsed;
+  try { parsed = JSON.parse(raw); } catch (e) { return { success: false, fatal: true, error: '不是合法 JSON，已拒收', version: VER }; }
+  if (!parsed || !parsed.rates || !parsed.shipping) return { success: false, fatal: true, error: '缺 rates/shipping，已拒收', version: VER };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch (_) { return { success: false, error: '後端忙碌中', version: VER }; }
+  try {
+    var sh = getOrCreateSettingsSheet();
+    var old = sh.getRange(1, 1, 4, 1).getValues();
+    sh.getRange(2, 1, 4, 1).setValues([[old[0][0]], [old[1][0]], [old[2][0]], [old[3][0]]]);
+    sh.getRange('A1').setValue(raw);
+    return { success: true, pushedAt: parsed._pushedAt || '', version: VER };
+  } catch (err) {
+    return { success: false, error: err.message, version: VER };
+  } finally { lock.releaseLock(); }
 }
 
 function getOrCreateSettingsSheet() {
@@ -263,6 +300,9 @@ function rowToRecord(row) {
     url:           s(row[24], base.url)
   };
   for (var k2 in vis) out[k2] = vis[k2];        // 可視欄位覆蓋（會計手動改過的會生效）
+  // 這兩欄一直是「寫得進去、讀不回來」：會計在表上改親友價／代運費以為生效，其實同步後又被舊值蓋回去
+  if (row[26] !== '' && row[26] != null) out.friendPrice = +row[26];
+  if (out.type === 'forward' && row[20] !== '' && row[20] != null) out.finalPrice = +row[20];
   if (!out.timestamp && row[1]) { try { out.timestamp = new Date(row[1]).toISOString(); } catch (e3) {} }
   return out;
 }
