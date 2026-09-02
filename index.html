@@ -2265,7 +2265,11 @@ function showDetail(id) {
   } else if (r.type === 'partner') {
     html += `</div><div class="detail-section"><h4>開團明細</h4>
       ${row('合作對象', r.partnerName)}
-      ${row('零售定價', 'NT$ ' + r.retailPrice?.toLocaleString())}
+      ${row('對方成本', 'NT$ ' + r.cost?.toLocaleString())}
+      ${r.weight != null ? row('重量', r.weight + ' KG') : ''}
+      ${r.intlShip != null ? row('運費（包稅）', 'NT$ ' + r.intlShip.toLocaleString()) : ''}
+      ${r.serviceFee != null ? row('服務費', 'NT$ ' + r.serviceFee.toLocaleString()) : ''}
+      ${r.inspectionFee ? row('拆檢費', 'NT$ ' + r.inspectionFee.toLocaleString()) : ''}
       ${row('合作開團價', '<strong style="color:var(--primary)">NT$ ' + r.finalPrice?.toLocaleString()+'</strong>')}`;
   } else if (r.type === 'forward') {
     html += `</div><div class="detail-section"><h4>代運明細</h4>
